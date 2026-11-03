@@ -37,7 +37,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   automáticamente. **CEO: leer infoempleo.com/avisolegal/ y decir si permite robots o la extracción de datos.**
 - **Greenhouse / Lever / Ashby** (APIs públicas de empleo de empresas): técnicamente viables (Typeform responde).
   **Más adelante (CEO, 2026-11-03)**: cuando el CEO tenga una lista de empresas. La lista NO va al repo (Neon `config`).
-- **Adzuna**: **DESCARTADA (CEO, 2026-11-03)**: al darse de alta pide pago (regla 8). No reintentar salvo que aparezca un plan gratis.
+- **Adzuna**: **DESCARTADA (CEO, 2026-11-03)**: solo 25 llamadas de prueba; después 8 £/mes con tarjeta (regla 8). No reintentar salvo que aparezca un plan gratis.
 - Repetir la sonda: **Barcelona Activa** (la URL era incorrecta), **SEPE Empléate** y **Careerjet** (robots.txt no leído).
 - Descartadas (no reintentar): InfoJobs API (prohíbe agregadores), Jooble API (500 peticiones de por vida),
   Talent.com (prohíbe el scraping), Ticjob (prohíbe descargar la web), Indeed (captcha), LinkedIn (robots.txt),
