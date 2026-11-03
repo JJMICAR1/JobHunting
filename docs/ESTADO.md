@@ -9,8 +9,6 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    conectores Canva y Descript, si aún no está hecho.
 2. PR de la Fase 6 fusionado (2026-11-03). El 2026-11-04 debe llegar a Telegram "Mercado 2026-11-04" (prod) hacia las 7:30
    de Madrid. Si está bien: abrir sesión nueva y escribir "Fase 6 OK".
-3. Infoempleo: leer infoempleo.com/avisolegal/ (y las condiciones de uso) buscando robot, araña, automatizad,
-   extracción, scraping, base de datos, reproducción; decir al jefe qué pone.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
@@ -33,11 +31,11 @@ El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecuci
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
 - **Jobfluent**: **NO por ahora (CEO, 2026-11-03)**. Pocas ofertas (~34), se solapa con Tecnoempleo y aviso legal en zona gris.
-- **Infoempleo** (unas 67 ofertas en Barcelona): el HTML se deja leer, pero el aviso legal no se puede leer
-  automáticamente. **CEO: leer infoempleo.com/avisolegal/ y decir si permite robots o la extracción de datos.**
+- **Infoempleo**: **DESCARTADA (CEO, 2026-11-03)**. Su aviso legal (2.2 ix) prohíbe obtener los contenidos con medios
+  distintos de los que ofrece (no hay API ni feed), y la base de datos es suya (ap. 4). Igual que Ticjob. No reintentar.
 - **Greenhouse / Lever / Ashby** (APIs públicas de empleo de empresas): técnicamente viables (Typeform responde).
   **Más adelante (CEO, 2026-11-03)**: cuando el CEO tenga una lista de empresas. La lista NO va al repo (Neon `config`).
-- **Adzuna**: **DESCARTADA (CEO, 2026-11-03)**: al darse de alta pide pago (regla 8). No reintentar salvo que aparezca un plan gratis.
+- **Adzuna**: **DESCARTADA (CEO, 2026-11-03)**: solo 25 llamadas de prueba; después 8 £/mes con tarjeta (regla 8). No reintentar salvo que aparezca un plan gratis.
 - Repetir la sonda: **Barcelona Activa** (la URL era incorrecta), **SEPE Empléate** y **Careerjet** (robots.txt no leído).
 - Descartadas (no reintentar): InfoJobs API (prohíbe agregadores), Jooble API (500 peticiones de por vida),
   Talent.com (prohíbe el scraping), Ticjob (prohíbe descargar la web), Indeed (captcha), LinkedIn (robots.txt),
