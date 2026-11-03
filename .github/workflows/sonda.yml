@@ -8,7 +8,7 @@ on:
       grupo:
         description: "Grupo de portales"
         type: choice
-        options: [fase2, fase4, condiciones]
+        options: [fase2, fase4, condiciones, legales]
         default: fase4
   push:
     branches: ["claude/**"]

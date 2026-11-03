@@ -180,7 +180,7 @@ def test_fase2_intacta():
 
 
 def test_grupos_definidos():
-    assert set(sonda.GRUPOS) == {"fase2", "fase4", "condiciones"}
+    assert set(sonda.GRUPOS) == {"fase2", "fase4", "condiciones", "legales"}
 
 
 def test_urls_https_y_sin_secretos():
