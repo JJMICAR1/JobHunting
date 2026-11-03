@@ -34,7 +34,7 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
     salida 0 ok / 2 bloqueado / 1 error). Un bloqueo a medias guarda ofertas pero no recuento.
   - Workflows: `pipeline` (manual: dev o dry-run; push en `claude/**` que cambie el workflow = ejecución
     en Neon dev), `fixture` (captura HTML para tests), `tests` con Postgres 16 de servicio.
-  - Tests: 110 (16 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
+  - Tests: 117 (16 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
@@ -62,7 +62,9 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
   `production` y `dev` (sin auto-borrado), secretos `NEON_URL_PROD` y `NEON_URL_DEV` en GitHub.
   La contraseña se rotó tras pegarse en un chat. Nunca pegar cadenas de conexión en el chat ni en el repo.
 - Hecho: `.env*` en `.gitignore`.
-- Fase 3: en vivo se descartan ~14 de 640 tarjetas; el resumen del pipeline ya muestra el motivo. Revisar.
+- Hecho (Fase 3): 14 tarjetas descartadas (ids `rf-` alfanuméricos) y 18 sin ubicación (texto sin `<b>`)
+  corregidos; fixture `tarjetas_raras.html`. Pipeline en dev: 632/633 ofertas, 0 descartadas.
+  Diagnóstico reutilizable: `scripts/diagnostico_tecnoempleo.py` (workflow `fixture` en push).
 - CEO: OK al cron diario contra Neon prod (`NEO_URL_PROD`) para cerrar la Fase 3.
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
