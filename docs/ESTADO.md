@@ -34,7 +34,10 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
     salida 0 ok / 2 bloqueado / 1 error). Un bloqueo a medias guarda ofertas pero no recuento.
   - Workflows: `pipeline` (manual: dev o dry-run; push en `claude/**` que cambie el workflow = ejecución
     en Neon dev), `fixture` (captura HTML para tests), `tests` con Postgres 16 de servicio.
-  - Tests: 117 (16 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
+  - Migración 002 (CEO): `ciudad` y `modalidad` (presencial/hibrido/remoto) separadas para todas las
+    ciudades; `huella` = empresa+título+ciudad normalizados. Repetidas NO se fusionan (pueden ser varias
+    vacantes): vista `v_grupos_ofertas`; mercado en `v_mercado_ciudad_modalidad`; `recuento_diario.n_unicas`.
+  - Tests: 150 (24 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
