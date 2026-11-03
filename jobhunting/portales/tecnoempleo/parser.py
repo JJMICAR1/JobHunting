@@ -8,7 +8,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
-from jobhunting.modelo import Oferta, OfertaInvalida
+from jobhunting.modelo import Oferta, OfertaInvalida, ParserRoto  # noqa: F401  (ParserRoto se re-exporta)
 from jobhunting.normalizar import separar_ubicacion
 
 PORTAL = "tecnoempleo"
@@ -17,10 +17,6 @@ BASE = "https://www.tecnoempleo.com/"
 _RE_ID = re.compile(r"rf-[0-9a-z]+$")
 _RE_FECHA = re.compile(r"(\d{2})/(\d{2})/(\d{4})")
 _RE_TOTAL = re.compile(r"^\s*([\d.]+)\s+Ofertas?\b", re.I)
-
-
-class ParserRoto(Exception):
-    """El HTML no tiene la estructura de listado esperada (posible cambio del portal)."""
 
 
 @dataclass

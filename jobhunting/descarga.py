@@ -10,6 +10,7 @@ from jobhunting.bloqueo import STATUS_BLOQUEO, clasificar
 
 USER_AGENT = "JobHuntingBot/0.1 (+https://github.com/JJMICAR1/JobHunting)"
 TIMEOUT = 20
+TIMEOUT_BYTES = 60   # descargas grandes (un XML de varios MB)
 
 
 class ErrorDescarga(Exception):
@@ -58,6 +59,22 @@ def crawl_delay(url: str) -> float:
     return float(d or 0)
 
 
+def _validar_respuesta(url: str, status, final: str, html: str) -> None:
+    """Para (Bloqueado) ante redirección a otro host, robots o señales de bloqueo/login; ErrorDescarga si error."""
+    if final and urlparse(final).netloc != urlparse(url).netloc:
+        raise Bloqueado("redireccion a otro host")
+    if final and final != url and not robots_permitido(final):
+        raise Bloqueado("redireccion prohibida por robots.txt")
+    # esperadas=["x"] es irrelevante: solo nos interesa bloqueado/login/error HTTP
+    estado, senales = clasificar(status, final, html, esperadas=[""])
+    if estado == "bloqueado":
+        raise Bloqueado(",".join(senales))
+    if estado == "redirige_login":
+        raise Bloqueado("redirige a login")
+    if estado == "error":
+        raise ErrorDescarga(",".join(senales))
+
+
 def descargar(url: str) -> str:
     if not robots_permitido(url):
         raise Bloqueado("prohibido por robots.txt")
@@ -75,16 +92,33 @@ def descargar(url: str) -> str:
             pass
     except Exception as e:
         raise ErrorDescarga(f"fallo de red: {type(e).__name__}")
-    if final and urlparse(final).netloc != urlparse(url).netloc:
-        raise Bloqueado("redireccion a otro host")
-    if final and final != url and not robots_permitido(final):
-        raise Bloqueado("redireccion prohibida por robots.txt")
-    # esperadas=["x"] es irrelevante: solo nos interesa bloqueado/login/error HTTP
-    estado, senales = clasificar(status, final, html, esperadas=[""])
-    if estado == "bloqueado":
-        raise Bloqueado(",".join(senales))
-    if estado == "redirige_login":
-        raise Bloqueado("redirige a login")
-    if estado == "error":
-        raise ErrorDescarga(",".join(senales))
+    _validar_respuesta(url, status, final, html)
     return html
+
+
+def descargar_bytes(url: str, max_bytes: int = 50_000_000) -> bytes:
+    """Como `descargar`, pero devuelve los bytes crudos (XML/JSON grandes) con un tope de tamaño.
+
+    Una sola petición, sin reintentos, sin pedir gzip. Si el cuerpo supera `max_bytes` -> ErrorDescarga.
+    """
+    if not robots_permitido(url):
+        raise Bloqueado("prohibido por robots.txt")
+    status, cuerpo, final = None, b"", url
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_BYTES) as r:
+            status, final = r.status, r.geturl()
+            cuerpo = r.read(max_bytes + 1)
+    except urllib.error.HTTPError as e:
+        status, final = e.code, e.geturl()
+        try:
+            cuerpo = e.read(max_bytes + 1)
+        except Exception:
+            pass
+    except Exception as e:
+        raise ErrorDescarga(f"fallo de red: {type(e).__name__}")
+    if len(cuerpo) > max_bytes:
+        raise ErrorDescarga("supera el tope de bytes")
+    # Solo el principio decide el bloqueo (las páginas de aviso son pequeñas).
+    _validar_respuesta(url, status, final, cuerpo[:60_000].decode("utf-8", "replace"))
+    return cuerpo

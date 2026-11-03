@@ -12,6 +12,10 @@ class OfertaInvalida(ValueError):
     pass
 
 
+class ParserRoto(Exception):
+    """La entrada no tiene la estructura esperada (posible cambio del portal). Común a todos los portales."""
+
+
 @dataclass(frozen=True)
 class Oferta:
     portal: str                 # "tecnoempleo"

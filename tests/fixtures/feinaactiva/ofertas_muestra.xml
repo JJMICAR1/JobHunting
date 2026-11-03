@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixture SINTETICO: todos los datos son inventados -->
+<ofertes>
+  <feinaactiva>
+    <ad>
+      <id>FA00000001</id>
+      <title>Tècnic/a de màrqueting digital</title>
+      <company>Empresa Ficticia Alfa SL</company>
+      <city>BARCELONA</city>
+      <postcode>08001</postcode>
+      <region>BARCELONA</region>
+      <date>03/11/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/FA00000001</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada completa</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Interessats: envieu el currículum a contacto@ejemplo.test. Salari segons conveni. Es valorarà experiència prèvia.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>FA00000002</id>
+      <title>Auxiliar administratiu</title>
+      <company></company>
+      <city>L'HOSPITALET DE LLOBREGAT</city>
+      <postcode>08901</postcode>
+      <region>BARCELONA</region>
+      <date>29/03/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/FA00000002</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada completa</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>FA00000003</id>
+      <title>Operari/ària de magatzem</title>
+      <company>Logística Imaginària SA</company>
+      <city>SANT CUGAT DEL VALLÈS</city>
+      <postcode>08172</postcode>
+      <region>BARCELONA</region>
+      <date>25/10/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/FA00000003</url>
+      <contract>Indefinit</contract>
+      <workingHours>Torns</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>FA00000004</id>
+      <title>Oferta amb enllaç d'un altre domini</title>
+      <company>Empresa Ficticia Beta SL</company>
+      <city>GIRONA</city>
+      <postcode>17001</postcode>
+      <region>GIRONA</region>
+      <date>02/11/2026</date>
+      <url>https://exemple.test/oferta/FA00000004</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada completa</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>FA00000001</id>
+      <title>Tècnic/a de màrqueting digital (repetida)</title>
+      <company>Empresa Ficticia Alfa SL</company>
+      <city>BARCELONA</city>
+      <postcode>08001</postcode>
+      <region>BARCELONA</region>
+      <date>03/11/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/FA00000001</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada completa</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>FA00000005</id>
+      <title></title>
+      <company>Empresa Ficticia Gamma SL</company>
+      <city>LLEIDA</city>
+      <postcode>25001</postcode>
+      <region>LLEIDA</region>
+      <date>01/11/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/FA00000005</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada completa</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+  </feinaactiva>
+  <sicas>
+    <ad>
+      <id>SI00000001</id>
+      <title>Programador/a Python en teletreball</title>
+      <company>Estudi Inventat SCP</company>
+      <city>TARRAGONA</city>
+      <postcode>43001</postcode>
+      <region>TARRAGONA</region>
+      <date>30/10/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/SI00000001</url>
+      <contract>Indefinit</contract>
+      <workingHours>Teletreball</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Descripció llarga inventada. Interessats: envieu el currículum a contacto@ejemplo.test. Salari segons conveni. Es valorarà experiència prèvia.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+    <ad>
+      <id>SI00000002</id>
+      <title>Dependent/a de botiga</title>
+      <company>Botiga Fictícia SL</company>
+      <city>CASTELL-PLATJA D'ARO</city>
+      <postcode>17249</postcode>
+      <region>GIRONA</region>
+      <date>26/03/2026</date>
+      <url>https://feinaactiva.gencat.cat/oferta/SI00000002</url>
+      <contract>Indefinit</contract>
+      <workingHours>Jornada parcial</workingHours>
+      <salaryMin>18000</salaryMin>
+      <salaryMax>24000</salaryMax>
+      <content>Text breu inventat.</content>
+      <experience>Sense experiència</experience>
+      <requirements>Requisits inventats.</requirements>
+      <studies>Batxillerat</studies>
+      <disability>No</disability>
+      <origin>FA</origin>
+      <status>PUBLISHED</status>
+      <category></category>
+    </ad>
+  </sicas>
+</ofertes>
