@@ -12,6 +12,11 @@ on:
         type: choice
         options: [dev, dry-run]
         default: dev
+      portal:
+        description: "Portal a ejecutar (el cron y el push ejecutan todos)"
+        type: choice
+        options: [todos, tecnoempleo, feinaactiva]
+        default: todos
   # En ramas claude/: ejecucion real contra Neon dev (secreto NEO_URL_DEV). Solo si cambia este archivo (rev. 3).
   push:
     branches: ["claude/**"]
@@ -40,16 +45,20 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.entorno == 'dev' }}
         env:
           DATABASE_URL: ${{ secrets.NEO_URL_DEV }}
+          PORTAL: ${{ inputs.portal || 'todos' }}
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
-          python -m jobhunting.pipeline
+          python -m jobhunting.pipeline --portal "$PORTAL"
       - name: Pipeline (prod)
         if: ${{ github.event_name == 'schedule' }}
         env:
           DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
+          PORTAL: todos
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
-          python -m jobhunting.pipeline
+          python -m jobhunting.pipeline --portal "$PORTAL"
       - name: Pipeline (dry-run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'dry-run' }}
-        run: python -m jobhunting.pipeline --dry-run
+        env:
+          PORTAL: ${{ inputs.portal || 'todos' }}
+        run: python -m jobhunting.pipeline --dry-run --portal "$PORTAL"
