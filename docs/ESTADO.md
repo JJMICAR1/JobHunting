@@ -60,7 +60,11 @@ y espera su puerta: que el CEO revise y fusione el PR.
   - Licencia: reutilización libre citando la fuente (Generalitat de Catalunya, Feina Activa) y la fecha de
     actualización, sin desnaturalizar la información (Ley 37/2007).
   - `scripts/diagnostico_feinaactiva.py` + workflow `diagnostico`: muestra la estructura del XML sin valores.
-  - Tests: 505 con BD (470 + 35 que se saltan sin BD).
+  - `db.guardar_ofertas` guarda por lotes de 500 (executemany en modo pipeline). La ejecución de los dos portales
+    pasa de 10,5 min a 2 min 13 s (el timeout es de 15).
+  - Neon dev, 2026-11-03: 1.ª ejecución, Feina Activa 4655 ofertas (3987 feinaactiva + 668 sicas), 0 descartadas,
+    4570 puestos únicos. 2.ª ejecución, 1 nueva (idempotente). Tecnoempleo 632, sin cambios.
+  - Tests: 514 con BD.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
