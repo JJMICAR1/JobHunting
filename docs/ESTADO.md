@@ -1,42 +1,36 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 4: Feina Activa en puerta)_
+_Última actualización: 2026-11-03 (Fase 4 OK; siguiente Fase 5)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
-1. **Puerta de Feina Activa (unos 5 min).**
-   - En la consola de Neon: proyecto `jobhunting`, rama **dev**, SQL Editor. Ejecuta:
-     ```sql
-     SELECT dia, portal, n_vistas, n_nuevas, n_unicas
-     FROM recuento_diario ORDER BY dia DESC, portal;
-     ```
-     Esperado hoy: `feinaactiva` con unas 4655 ofertas y 4570 únicas; `tecnoempleo` con unas 632.
-   - Muestra de ofertas (abre 2 o 3 URLs y comprueba que llevan a la oferta real):
-     ```sql
-     SELECT titulo, empresa, ciudad, fecha_publicacion, url
-     FROM ofertas WHERE portal = 'feinaactiva' LIMIT 20;
-     ```
-   - Si cuadra, fusiona el PR #11 y escribe al jefe **"Feina Activa OK"**. Al fusionar, el cron de prod
-     (05:17 UTC) recogerá los dos portales.
-2. Opcional: **Adzuna**. Date de alta en developer.adzuna.com (gratis) y guarda la clave como secretos de
-   GitHub. Pide antes al jefe los nombres de los secretos.
-3. **Decidir sobre Jobfluent** (portal tech de Barcelona, unas 34 ofertas). Su aviso legal no prohíbe el acceso
-   automatizado, pero dice que no se ceden derechos de explotación de los contenidos. Guardaríamos solo la ficha
-   ligera (título, empresa, url) para uso personal. ¿Sí o no?
-4. **Infoempleo:** su aviso legal no se puede leer de forma automática. Si quieres esta fuente, ábrelo tú
-   (infoempleo.com/avisolegal/) y dime si dice algo sobre robots o la extracción de datos.
-5. **Cerrar la Fase 4:** el jefe recomienda escribir **"Fase 4 OK"** con Tecnoempleo y Feina Activa. Jobfluent,
-   Greenhouse y Adzuna se pueden añadir más adelante, cada una con su puerta. Después, abrir una sesión nueva:
-   "Empezamos la Fase 5".
-6. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
-   `NEO_URL_PROD` y limítalo a la rama `main`.
+1. Abrir una sesión nueva y escribir **"Empezamos la Fase 5"**.
+
+Nada más es urgente. Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para hacerlo más adelante.
 
 ## Fase actual
-**Fase 4 — Fuentes: en curso (desde 2026-11-03).** Sonda de fuentes nuevas hecha: ver `docs/VIABILIDAD_FASE4.md`.
-PR #10 fusionado: sonda Fase 4 y cron de prod, que está activo desde el 2026-11-03 (antes no existía).
-Primera fuente nueva: **Feina Activa** (XML abierto de la Generalitat). Está construida y probada en Neon dev,
-y espera su puerta: que el CEO revise y fusione el PR.
+**Fase 4 — Fuentes: OK (CEO, 2026-11-03).** Cerrada con Tecnoempleo y Feina Activa (PR #10 y #11 fusionados).
+El cron de prod está activo desde el 2026-11-03 (05:17 UTC, los dos portales); su primera ejecución es el 2026-11-04.
+**Siguiente: Fase 5 — Salud y reparación**, en una sesión nueva.
+Al empezar la Fase 5, lo primero: comprobar en Actions que el cron de prod corrió (evento schedule) y que
+`recuento_diario` de la rama `production` tiene fila de hoy para `tecnoempleo` y `feinaactiva`.
+
+## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
+Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
+- **Jobfluent** (tech, Barcelona, unas 34 ofertas): el HTML se deja leer y robots.txt lo permite. El aviso legal está
+  en zona gris: no prohíbe el acceso automatizado, pero no cede derechos de explotación. **CEO: ¿sí o no?**
+- **Infoempleo** (unas 67 ofertas en Barcelona): el HTML se deja leer, pero el aviso legal no se puede leer
+  automáticamente. **CEO: leer infoempleo.com/avisolegal/ y decir si permite robots o la extracción de datos.**
+- **Greenhouse / Lever / Ashby** (APIs públicas de empleo de empresas): técnicamente viables (Typeform responde).
+  **CEO: dar una lista de empresas de interés**; el jefe busca sus slugs.
+- **Adzuna** (API, gratis para búsqueda personal, con atribución): **CEO: darse de alta en developer.adzuna.com**
+  y guardar la clave como secretos (el jefe dirá antes los nombres).
+- Repetir la sonda: **Barcelona Activa** (la URL era incorrecta), **SEPE Empléate** y **Careerjet** (robots.txt no leído).
+- Descartadas (no reintentar): InfoJobs API (prohíbe agregadores), Jooble API (500 peticiones de por vida),
+  Talent.com (prohíbe el scraping), Ticjob (prohíbe descargar la web), Indeed (captcha), LinkedIn (robots.txt),
+  Glassdoor (403), SmartRecruiters (robots.txt).
+- Seguridad (opcional, CEO): un GitHub Environment `prod` con `NEO_URL_PROD`, limitado a `main`.
 
 | Fase | Estado |
 |------|--------|
@@ -44,8 +38,10 @@ y espera su puerta: que el CEO revise y fusione el PR.
 | 1. Fundación | OK (CEO) |
 | 2. Viabilidad | OK (CEO) |
 | 3. Esqueleto andante | OK (CEO) |
-| 4. Fuentes | En curso |
-| 5–9 | Sin empezar |
+| 4. Fuentes | OK (CEO) |
+| 4.5 Fuentes pendientes | Más adelante |
+| 5. Salud y reparación | Siguiente |
+| 6–9 | Sin empezar |
 
 ## Qué hay
 - `.claude/agents/`: scraper-dev, tester, db-engineer, ml-engineer, devops, reviewer
@@ -100,6 +96,7 @@ y espera su puerta: que el CEO revise y fusione el PR.
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.
 - Fase 4: scraper-dev, tester, reviewer (+ devops si hay secretos de API nuevos).
+- Fase 5: devops, scraper-dev, tester, reviewer.
 - Fase 8: ml-engineer.
 
 ## Decisiones
