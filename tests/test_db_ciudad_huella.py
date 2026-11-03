@@ -28,7 +28,7 @@ def test_migracion_001_a_002_conserva_filas(conn):
         conn.execute("INSERT INTO ofertas (portal,id_portal,titulo,url,empresa,ubicacion,primera_vez,ultima_vez) "
                      "VALUES ('tecnoempleo',%s,'T','https://x/y','E','Barcelona',%s,%s)", (f"rf-{i}", T1, T1))
     conn.execute("INSERT INTO recuento_diario (dia,portal,n_vistas,n_nuevas) VALUES ('2026-11-03','tecnoempleo',3,3)")
-    assert db.migrar(conn) == ["002_ciudad_modalidad_huella", "003_ejecuciones_salud"]
+    assert db.migrar(conn) == ["002_ciudad_modalidad_huella", "003_ejecuciones_salud", "004_mercado"]
     assert conn.execute("SELECT count(*) FROM ofertas").fetchone()[0] == 3
     assert conn.execute("SELECT count(*) FROM ofertas WHERE ciudad IS NULL AND modalidad IS NULL "
                         "AND huella IS NULL").fetchone()[0] == 3
@@ -104,10 +104,10 @@ def test_recuento_cuenta_huella_null_por_fila(conn):
 
 
 def test_no_quedan_vistas_entre_tests(conn):
-    """El DROP ... CASCADE del conftest debe llevarse las vistas de 002."""
+    """El DROP ... CASCADE del conftest debe llevarse las vistas de 002 y 004."""
     n = conn.execute("SELECT count(*) FROM information_schema.views WHERE table_schema = current_schema()"
                      ).fetchone()[0]
     assert n == 0
     db.migrar(conn)
     assert conn.execute("SELECT count(*) FROM information_schema.views WHERE table_schema = current_schema()"
-                        ).fetchone()[0] == 2
+                        ).fetchone()[0] == 4

@@ -1,26 +1,31 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 5 OK; siguiente Fase 6)_
+_Última actualización: 2026-11-03 (Fase 6 construida; falta la puerta del CEO)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
 1. En la tarea "Reparador JobHunting" (claude.ai/code → Routines): poner la hora a las **9:23** de Madrid y quitar los
    conectores Canva y Descript, si aún no está hecho.
-2. Abrir una sesión nueva y escribir **"Empezamos la Fase 6"**.
+2. Revisar y fusionar el PR de la Fase 6; al día siguiente debe llegar el mensaje de prod tras el cron. Si está bien: "Fase 6 OK".
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 5 — Salud y reparación: OK (CEO, 2026-11-03).** Siguiente: **Fase 6 — Control de mercado** (vistas SQL y recuento por Telegram).
+**Fase 6 — Control de mercado: construida (2026-11-03), falta la puerta del CEO.**
+Puerta propuesta: el CEO recibe en Telegram el recuento de dev (manual) y, tras fusionar, el de prod tras el cron.
+2026-11-03: bot creado y secretos `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` guardados; `mercado` en dev enviado a Telegram (ok).
+Si Telegram responde 401: el secreto del token está mal (sin `bot` delante, sin espacios, o token revocado).
+Al empezar la siguiente sesión: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` y `mercado`
+corrieron tras él y que `recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
+
+**Fase 5 — Salud y reparación: OK (CEO, 2026-11-03).**
 Simulacro 2026-11-03: selector de Tecnoempleo roto a propósito → pipeline en Neon dev (0 ofertas) → `salud` abrió
 el issue #14 → arreglo con test de regresión (PR #15, hecho desde la sesión de la fase con scraper-dev) →
 pipeline en dev con el arreglo → `salud` cerró el #14 sola.
 Reparador automático: la tarea "Reparador JobHunting" (creada por el CEO en claude.ai) lee el repo y los issues
 (prueba manual: "Sin alertas"). Aún no ha reparado una alerta real por sí sola.
 El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
-Al empezar la Fase 6: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` corrió tras él y que
-`recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
@@ -47,7 +52,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 4. Fuentes | OK (CEO) |
 | 4.5 Fuentes pendientes | Más adelante |
 | 5. Salud y reparación | OK (CEO) |
-| 6. Control de mercado | Siguiente |
+| 6. Control de mercado | Construida; falta puerta |
 | 7–9 | Sin empezar |
 
 ## Qué hay
@@ -112,14 +117,30 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   - `docs/REPARADOR.md`: procedimiento, prompt y lecciones del reparador (tarea programada del CEO en claude.ai).
   - Neon dev, 2026-11-03: `salud` → "todo bien", 0 issues. Tests: 612 con BD.
 
+- Fase 6:
+  - Migración 004: `recuento_diario.n_desaparecidas` (ofertas vistas en el recuento anterior del portal y no hoy; NULL sin
+    recuento anterior; cuenta filas, no huellas). Vistas `v_mercado_diario` (todas las fechas, Δ1d/Δ7d con fechas exactas,
+    NULL si falta el día) y `v_mercado_hoy` (último día por portal).
+  - `jobhunting/mercado.py` (`python -m jobhunting.mercado --entorno prod|dev [--dry-run]`): lee `v_mercado_hoy` (no migra),
+    formatea texto plano y lo envía con la Bot API de Telegram (urllib, timeout 20 s, sin reintentos). Nunca imprime token,
+    chat_id ni DATABASE_URL. Sin secretos de Telegram: imprime el mensaje en el log y sale 0. Cita la fuente Feina Activa.
+  - `.github/workflows/mercado.yml`: tras `pipeline` (workflow_run; prod si vino del cron y solo desde main; si no, dev;
+    se salta si cancelled), manual dev/prod y push en `claude/**` del propio yml (dev). `contents: read`.
+  - Tests: 660 con BD (75 se saltan sin BD). Reviewer: aprobado sin bloqueantes.
+
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.
 - Fase 4: scraper-dev, tester, reviewer (+ devops si hay secretos de API nuevos).
 - Fase 5: devops, scraper-dev, tester, reviewer.
+- Fase 6: db-engineer, devops, tester, reviewer.
 - Fase 8: ml-engineer.
 
 ## Decisiones
+- 2026-11-03 (CEO, Fase 6): OK a Telegram (solo enviar desde Actions; el alojamiento del bot para etiquetar sigue en la
+  Fase 7). Contenido: por portal (activas, nuevas, desaparecidas, únicos, Δ1d/Δ7d). Envío tras el cron de prod.
+- 2026-11-03 (Fase 6, reviewer): el push en `claude/**` de `mercado.yml` usa el token de Telegram con código de la rama
+  (como pipeline.yml con NEO_URL_DEV). Aceptado: solo quien tiene escritura en el repo. Si molesta, bot aparte para dev.
 - 2026-11-03 (CEO, Fase 5): alertas por issue de GitHub (Telegram sigue en la Fase 7); reparador = tarea
   programada diaria condicional (si no hay issues `alerta`, termina); OK a crear el workflow `salud` con cron y latido.
 - 2026-11-03 (CEO, Fase 5): el trabajo de cada fase se hace desde la sesión de la fase, con subagentes, cuidando la cuota.
