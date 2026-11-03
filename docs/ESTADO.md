@@ -1,18 +1,19 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 3 en revisión)_
+_Última actualización: 2026-11-03 (Fase 3 OK)_
 
 ## Fase actual
-**Fase 3 — Esqueleto andante: construida, pendiente de puerta del CEO.**
-Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación manual del CEO y OK al cron de prod.
+**Fase 3 — Esqueleto andante: OK (CEO, 2026-11-03).** PR #8 fusionado; cron diario 05:17 UTC en prod.
+Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
 
 | Fase | Estado |
 |------|--------|
 | 0. Arranque | OK (CEO) |
 | 1. Fundación | OK (CEO) |
 | 2. Viabilidad | OK (CEO) |
-| 3. Esqueleto andante | En revisión (PR) |
-| 4–9 | Sin empezar |
+| 3. Esqueleto andante | OK (CEO) |
+| 4. Fuentes | Siguiente |
+| 5–9 | Sin empezar |
 
 ## Qué hay
 - `.claude/agents/`: scraper-dev, tester, db-engineer, ml-engineer, devops, reviewer
@@ -42,6 +43,7 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.
+- Fase 4: scraper-dev, tester, reviewer (+ devops si hay secretos de API nuevos).
 - Fase 8: ml-engineer.
 
 ## Decisiones
@@ -60,6 +62,15 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
   (sin la N); el código usa esos nombres. Commit explícito: `db.conectar` abre en autocommit.
 - Test local en la nube: Postgres 16 del contenedor (`/usr/lib/postgresql/16/bin`), usar `python3 -m pytest`.
 
+- 2026-11-03 (CEO, plan de la Fase 4): NO se construye nada que salte captchas, Cloudflare u otras
+  protecciones (regla 7, riesgo legal, coste). La Fase 4 combina:
+  1. APIs oficiales gratuitas de InfoJobs y Jooble: el jefe revisa primero sus condiciones de uso
+     (límites, si permiten guardar datos) y luego el CEO da de alta las claves como secretos.
+  2. Sonda de portales nuevos que se dejen leer (portales públicos de empleo, webs catalanas, páginas
+     de empleo de empresas), con su tabla funciona/bloqueado como en la Fase 2.
+  3. Fuentes con formatos abiertos (feeds de ofertas).
+  Cada fuente nueva necesita el OK del CEO y su propia puerta.
+
 ## Pendientes
 - Hecho (CEO, 2026-11-03): Neon free, proyecto `jobhunting` en Frankfurt (Postgres 18), ramas
   `production` y `dev` (sin auto-borrado), secretos `NEON_URL_PROD` y `NEON_URL_DEV` en GitHub.
@@ -72,4 +83,6 @@ Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación man
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
 - CEO: decidir si se piden claves de las APIs de InfoJobs y Jooble (gratis, nuevo servicio + secreto).
+- Fase 4 (al empezar): comprobar en Actions que el cron de prod corrió bien (pipeline, evento schedule)
+  y que `recuento_diario` en la rama `production` tiene fila del día.
 - Hecho: actions a Node 24 (checkout@v5, setup-python@v6, upload-artifact@v6).
