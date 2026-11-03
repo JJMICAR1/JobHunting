@@ -9,7 +9,7 @@ on:
         type: choice
         options: [dev, dry-run]
         default: dev
-  # En ramas claude/: dry-run en vivo (sin BD). El modo dev solo por dispatch.
+  # En ramas claude/: ejecucion real contra Neon dev (secreto NEO_URL_DEV).
   push:
     branches: ["claude/**"]
     paths: [".github/workflows/pipeline.yml"]
@@ -34,12 +34,12 @@ jobs:
       - run: pip install -r requirements.txt
       # Salida: 0 ok, 2 bloqueado, 1 error. 1 y 2 hacen fallar el job.
       - name: Pipeline (dev)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'dev' }}
+        if: ${{ github.event_name == 'push' || inputs.entorno == 'dev' }}
         env:
-          DATABASE_URL: ${{ secrets.NEON_URL_DEV }}
+          DATABASE_URL: ${{ secrets.NEO_URL_DEV }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEON_URL_DEV no llega al workflow"; exit 1; fi
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
           python -m jobhunting.pipeline
       - name: Pipeline (dry-run)
-        if: ${{ github.event_name == 'push' || inputs.entorno == 'dry-run' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'dry-run' }}
         run: python -m jobhunting.pipeline --dry-run
