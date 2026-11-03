@@ -9,9 +9,7 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    conectores Canva y Descript, si aún no está hecho.
 2. PR de la Fase 6 fusionado (2026-11-03). El 2026-11-04 debe llegar a Telegram "Mercado 2026-11-04" (prod) hacia las 7:30
    de Madrid. Si está bien: abrir sesión nueva y escribir "Fase 6 OK".
-3. Adzuna (aprobada): darse de alta en developer.adzuna.com, crear una app y guardar en GitHub los secretos
-   `ADZUNA_APP_ID` y `ADZUNA_APP_KEY`.
-4. Infoempleo: leer infoempleo.com/avisolegal/ (y las condiciones de uso) buscando robot, araña, automatizad,
+3. Infoempleo: leer infoempleo.com/avisolegal/ (y las condiciones de uso) buscando robot, araña, automatizad,
    extracción, scraping, base de datos, reproducción; decir al jefe qué pone.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
@@ -39,8 +37,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   automáticamente. **CEO: leer infoempleo.com/avisolegal/ y decir si permite robots o la extracción de datos.**
 - **Greenhouse / Lever / Ashby** (APIs públicas de empleo de empresas): técnicamente viables (Typeform responde).
   **Más adelante (CEO, 2026-11-03)**: cuando el CEO tenga una lista de empresas. La lista NO va al repo (Neon `config`).
-- **Adzuna**: **SÍ (CEO, 2026-11-03)**. API gratis para búsqueda personal, con atribución. Secretos `ADZUNA_APP_ID` y
-  `ADZUNA_APP_KEY` (los crea el CEO). Construir en una sesión de la Fase 4.5: leer antes las condiciones y límites.
+- **Adzuna**: **DESCARTADA (CEO, 2026-11-03)**: al darse de alta pide pago (regla 8). No reintentar salvo que aparezca un plan gratis.
 - Repetir la sonda: **Barcelona Activa** (la URL era incorrecta), **SEPE Empléate** y **Careerjet** (robots.txt no leído).
 - Descartadas (no reintentar): InfoJobs API (prohíbe agregadores), Jooble API (500 peticiones de por vida),
   Talent.com (prohíbe el scraping), Ticjob (prohíbe descargar la web), Indeed (captcha), LinkedIn (robots.txt),
