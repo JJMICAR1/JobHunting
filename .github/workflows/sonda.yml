@@ -28,7 +28,9 @@ jobs:
           python-version: "3.12"
       - name: Sonda (manual)
         if: github.event_name == 'workflow_dispatch'
-        run: python scripts/sonda_portales.py --grupo "${{ inputs.grupo }}"
+        env:
+          GRUPO: ${{ inputs.grupo }}
+        run: python scripts/sonda_portales.py --grupo "$GRUPO"
       - name: Sonda fase4 (push)
         if: github.event_name == 'push'
         run: python scripts/sonda_portales.py --grupo fase4

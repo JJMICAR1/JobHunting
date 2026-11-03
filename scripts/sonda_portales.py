@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -43,6 +43,8 @@ MAX_LECTURA = 5 * 1024 * 1024   # tope de lectura para xml/json (5 MB)
 MAX_CAMPOS = 30                 # nº de nombres de campo distintos que se registran
 MAX_TEXTO_CONDICIONES = 15000   # caracteres por página de condiciones
 MAX_LECTURA_CONDICIONES = 2 * 1024 * 1024
+MAX_LECTURA_ROBOTS = 500 * 1024  # tope de lectura de robots.txt
+MAX_REDIRECTS = 3
 
 _JSON = ["{", "[", "title", "jobs"]
 _XML = ["<offer", "<oferta", "<job", "<?xml"]
@@ -258,6 +260,61 @@ def rows_updated_utc(texto):
         return None
 
 
+def host_de(url):
+    """Host (minúsculas, con puerto si lo hay) de una URL; '' si no se puede."""
+    try:
+        return (urlparse(url or "").netloc or "").lower()
+    except Exception:
+        return ""
+
+
+def es_host_bloqueado(reg):
+    """True si el registro indica bloqueo del host (403/429 o estado bloqueado)."""
+    return reg.get("http_status") in (403, 429) or reg.get("estado") == "bloqueado"
+
+
+def registro_omitido(portal, url):
+    """Registro para una URL saltada porque su host ya devolvió bloqueo en esta ejecución."""
+    return {"portal": portal, "url": url, "robots_ok": None, "http_status": None,
+            "url_final": None, "bytes": 0, "ms": 0, "senales": ["host_bloqueado_previo"],
+            "estado": "omitido_host_bloqueado",
+            "fecha_utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+class RedirectSeguro(urllib.request.HTTPRedirectHandler):
+    """Antes de seguir cada salto comprueba robots.txt del destino. Máx. MAX_REDIRECTS saltos.
+
+    `robots` es inyectable (callable url -> True/False/None). Si no es True, no se sigue
+    y `bloqueo` queda en 'redirect_prohibido_robots' o 'redirect_robots_no_leido'.
+    """
+    max_redirections = MAX_REDIRECTS
+    max_repeats = MAX_REDIRECTS
+
+    def __init__(self, robots=None):
+        self.robots = robots
+        self.bloqueo = None
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        destino = urljoin(req.full_url, newurl)
+        if urlparse(destino).path != "/robots.txt":  # el propio robots.txt no se re-comprueba
+            ok = (self.robots or robots_permitido)(destino)
+            if ok is not True:
+                self.bloqueo = ("redirect_prohibido_robots" if ok is False
+                                else "redirect_robots_no_leido")
+                return None  # urllib lanza HTTPError con la 30x original
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_REDIRECT = RedirectSeguro(robots=lambda u: robots_permitido(u))  # sin cookies
+
+
+def _abrir(req):
+    """urlopen con redirecciones controladas por robots.txt (sin cookies)."""
+    _REDIRECT.bloqueo = None
+    urllib.request.install_opener(urllib.request.build_opener(_REDIRECT))
+    return urllib.request.urlopen(req, timeout=TIMEOUT)
+
+
 def robots_permitido(url):
     p = urlparse(url)
     rp = urllib.robotparser.RobotFileParser()
@@ -265,7 +322,7 @@ def robots_permitido(url):
     try:
         req = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            rp.parse(r.read().decode("utf-8", "replace").splitlines())
+            rp.parse(r.read(MAX_LECTURA_ROBOTS).decode("utf-8", "replace").splitlines())
     except urllib.error.HTTPError as e:
         # robots.txt 4xx = sin restricciones publicadas; 5xx = no concluyente
         return True if e.code < 500 else None
@@ -292,19 +349,19 @@ def sondear(cfg):
     t0 = time.monotonic()
     html = ""
     tipo = cfg.get("tipo", "html")
-    tope = cfg.get("max_bytes")
+    tope = cfg.get("max_bytes") or MAX_LECTURA
     reg["tipo"] = tipo
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with _abrir(req) as r:
             reg["http_status"] = r.status
             reg["url_final"] = r.geturl()
             try:
                 reg["content_type"] = r.headers.get("Content-Type")
             except Exception:
                 pass
-            body = r.read(tope + 1) if tope else r.read()
-            if tope and len(body) > tope:
+            body = r.read(tope + 1)
+            if len(body) > tope:
                 body = body[:tope]
                 reg["truncado"] = True
             reg["bytes"] = len(body)
@@ -313,7 +370,7 @@ def sondear(cfg):
         reg["http_status"] = e.code
         reg["url_final"] = e.geturl()
         try:
-            body = e.read(tope) if tope else e.read()
+            body = e.read(tope)
             reg["bytes"] = len(body)
             html = body.decode("utf-8", "replace")
         except Exception:
@@ -323,6 +380,11 @@ def sondear(cfg):
         reg["ms"] = int((time.monotonic() - t0) * 1000)
         return reg
     reg["ms"] = int((time.monotonic() - t0) * 1000)
+    if _REDIRECT.bloqueo:
+        reg["senales"] += ["redirect", _REDIRECT.bloqueo]
+        reg["estado"] = ("prohibido_robots" if _REDIRECT.bloqueo == "redirect_prohibido_robots"
+                         else "error")
+        return reg
     if reg["url_final"] and reg["url_final"] != url:
         reg["senales"].append("redirect")
         if robots_permitido(reg["url_final"]) is False:
@@ -368,7 +430,7 @@ def condicion(cfg):
     status, html = None, ""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with _abrir(req) as r:
             status = r.status
             html = r.read(MAX_LECTURA_CONDICIONES).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
@@ -379,6 +441,8 @@ def condicion(cfg):
             pass
     except Exception as e:
         return f"===== {nombre} {url} (excepcion:{type(e).__name__}) =====\n"
+    if _REDIRECT.bloqueo:
+        return f"===== {nombre} {url} ({_REDIRECT.bloqueo}) =====\n"
     cab = f"===== {nombre} {url} ({status}) =====\n"
     if status is not None and status >= 400:
         return cab + f"[sin texto: HTTP {status}]\n"
@@ -387,11 +451,19 @@ def condicion(cfg):
 
 def main_condiciones():
     bloques = []
+    bloqueados = set()
     for i, cfg in enumerate(CONDICIONES):
+        if host_de(cfg["url"]) in bloqueados:
+            b = f"===== {cfg['nombre']} {cfg['url']} (omitido_host_bloqueado) =====\n"
+            print(b, flush=True)
+            bloques.append(b)
+            continue
         if i:
             time.sleep(PAUSA_S)
         try:
             b = condicion(cfg)
+            if re.search(r"\((403|429)\) =====|sin texto: HTTP (403|429)", b):
+                bloqueados.add(host_de(cfg["url"]))
         except Exception as e:
             b = f"===== {cfg['nombre']} {cfg['url']} (excepcion:{type(e).__name__}) =====\n"
         print(b, flush=True)
@@ -403,16 +475,27 @@ def main_condiciones():
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--grupo", choices=sorted(GRUPOS), default="fase2")
-    args = ap.parse_args(argv)
+    try:
+        args = ap.parse_args(argv)
+    except SystemExit as e:
+        if e.code not in (0, None):  # error de uso: visible como anotación en Actions
+            print("::error::sonda_portales: argumentos inválidos (ver stderr)", file=sys.stderr)
+        raise
     if args.grupo == "condiciones":
         main_condiciones()
         return 0
     regs = []
+    bloqueados = set()
     for i, cfg in enumerate(GRUPOS[args.grupo]):
+        if host_de(cfg["url"]) in bloqueados:
+            regs.append(registro_omitido(cfg["portal"], cfg["url"]))
+            continue
         if i:
             time.sleep(PAUSA_S)
         try:
             regs.append(sondear(cfg))
+            if es_host_bloqueado(regs[-1]):
+                bloqueados.add(host_de(cfg["url"]))
         except Exception as e:  # nunca romper el informe
             regs.append({"portal": cfg["portal"], "url": cfg["url"], "robots_ok": None,
                          "http_status": None, "url_final": None, "bytes": 0, "ms": 0,
