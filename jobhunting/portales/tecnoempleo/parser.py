@@ -12,7 +12,8 @@ from jobhunting.modelo import Oferta, OfertaInvalida
 
 PORTAL = "tecnoempleo"
 BASE = "https://www.tecnoempleo.com/"
-_RE_ID = re.compile(r"rf-[0-9a-f]+$")
+# Ids alfanuméricos: la mayoría son hex, pero hay ofertas antiguas con otras letras.
+_RE_ID = re.compile(r"rf-[0-9a-z]+$")
 _RE_FECHA = re.compile(r"(\d{2})/(\d{2})/(\d{4})")
 _RE_TOTAL = re.compile(r"^\s*([\d.]+)\s+Ofertas?\b", re.I)
 
@@ -55,6 +56,11 @@ def _ficha(tarjeta) -> Oferta:
     span = tarjeta.select_one("span.d-block.d-lg-none")
     if span:
         b = span.find("b")
+        if not b:
+            # Variante sin <b>: "España - 29/10/2026" (texto suelto antes de la fecha)
+            primero = next((n for n in span.children if isinstance(n, str) and n.strip()), "")
+            texto = _RE_FECHA.split(primero)[0] if _RE_FECHA.search(primero) else primero
+            ubicacion = _txt(texto).rstrip(" -") or None
         if b:
             ubicacion = _txt(b.get_text())
             resto = b.next_sibling
