@@ -97,7 +97,9 @@ def ejecutar_portal(portal="tecnoempleo", fetch=None, dry_run=False, database_ur
     if conn is not None:
         try:
             db.registrar_ejecucion(conn, portal, inicio, ahora(), estado,
-                                   len(rec.ofertas) if rec else 0, detalle)
+                                   len(rec.ofertas) if rec else 0, detalle,
+                                   n_descartadas=rec.n_descartadas if rec else 0,
+                                   total_anunciado=rec.total_anunciado if rec else None)
             conn.commit()
         except Exception as e:
             print(f"No se pudo registrar la ejecucion: {type(e).__name__}", file=sys.stderr)

@@ -1,0 +1,90 @@
+name: salud
+
+# Fase 5: evalua la tabla `ejecuciones` y abre/cierra issues `alerta` (idempotente).
+# - Tras cada ejecucion del pipeline (workflow_run): si el pipeline vino del cron -> prod; si no -> dev.
+#   workflow_run solo se activa cuando este archivo esta en main.
+# - Cron diario 07:41 UTC (prod): detecta si el cron del pipeline no corrio (latido, >28 h) y
+#   re-activa los workflows con cron para que GitHub no los apague tras 60 dias sin actividad.
+# - Manual (dev o prod) y push en claude/** que cambie este archivo (dev, sin latido).
+on:
+  workflow_run:
+    workflows: [pipeline]
+    types: [completed]
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
+    inputs:
+      entorno:
+        description: "Base de datos a evaluar"
+        type: choice
+        options: [dev, prod]
+        default: dev
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/salud.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: salud
+  cancel-in-progress: false
+
+jobs:
+  salud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write     # abrir/cerrar issues de alerta
+      actions: write    # latido: re-activar los workflows con cron
+    steps:
+      # En workflow_run se usa el codigo de main (nunca el de la rama que disparo el pipeline).
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Elegir entorno
+        id: env
+        env:
+          EVENTO: ${{ github.event_name }}
+          EVENTO_PIPELINE: ${{ github.event.workflow_run.event }}
+          ENTORNO_MANUAL: ${{ inputs.entorno }}
+        run: |
+          case "$EVENTO" in
+            schedule) E=prod; H=28 ;;
+            workflow_run) if [ "$EVENTO_PIPELINE" = schedule ]; then E=prod; H=28; else E=dev; H=0; fi ;;
+            workflow_dispatch) E="$ENTORNO_MANUAL"; if [ "$E" = prod ]; then H=28; else H=0; fi ;;
+            *) E=dev; H=0 ;;
+          esac
+          echo "entorno=$E" >> "$GITHUB_OUTPUT"
+          echo "max_horas=$H" >> "$GITHUB_OUTPUT"
+      - name: Salud (dev)
+        if: steps.env.outputs.entorno == 'dev'
+        env:
+          DATABASE_URL: ${{ secrets.NEO_URL_DEV }}
+          GITHUB_TOKEN: ${{ github.token }}
+          MAX_HORAS: ${{ steps.env.outputs.max_horas }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
+          python -m jobhunting.salud --entorno dev --max-horas "$MAX_HORAS"
+      - name: Salud (prod)
+        if: steps.env.outputs.entorno == 'prod'
+        env:
+          DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
+          GITHUB_TOKEN: ${{ github.token }}
+          MAX_HORAS: ${{ steps.env.outputs.max_horas }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
+          python -m jobhunting.salud --entorno prod --max-horas "$MAX_HORAS"
+      - name: Latido (re-activar workflows con cron)
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          for wf in pipeline.yml salud.yml; do
+            gh api -X PUT "repos/$REPO/actions/workflows/$wf/enable" && echo "$wf activo"
+          done
