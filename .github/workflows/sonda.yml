@@ -1,8 +1,18 @@
 name: sonda
 
-# Solo a mano (pestaña Actions > sonda > Run workflow). Sin cron: no toca portales sola.
+# A mano (Actions > sonda > Run workflow) o al tocar este archivo en ramas claude/**.
+# Sin cron: no toca portales sola. Sin secretos.
 on:
   workflow_dispatch:
+    inputs:
+      grupo:
+        description: "Grupo de portales"
+        type: choice
+        options: [fase2, fase4, condiciones]
+        default: fase4
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/sonda.yml"]
 
 permissions:
   contents: read
@@ -10,16 +20,28 @@ permissions:
 jobs:
   sonda:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python scripts/sonda_portales.py
+      - name: Sonda (manual)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GRUPO: ${{ inputs.grupo }}
+        run: python scripts/sonda_portales.py --grupo "$GRUPO"
+      - name: Sonda fase4 (push)
+        if: github.event_name == 'push'
+        run: python scripts/sonda_portales.py --grupo fase4
+      - name: Condiciones (push)
+        if: github.event_name == 'push'
+        run: python scripts/sonda_portales.py --grupo condiciones
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: sonda
-          path: sonda.json
+          path: |
+            sonda.json
+            condiciones.txt
           if-no-files-found: warn

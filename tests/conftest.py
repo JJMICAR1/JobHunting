@@ -25,6 +25,15 @@ def _sin_red(request, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", connect)
 
 
+@pytest.fixture(autouse=True)
+def _cache_robots_limpia():
+    """La cache de robots.txt de la sonda no debe filtrarse entre tests."""
+    from tests import test_sonda
+    test_sonda.sonda.vaciar_cache_robots()
+    yield
+    test_sonda.sonda.vaciar_cache_robots()
+
+
 @pytest.fixture(scope="session")
 def html_p1():
     return (FIXTURES / "listado_catalunya_p1.html").read_text(encoding="utf-8")

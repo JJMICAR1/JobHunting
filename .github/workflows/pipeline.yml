@@ -1,7 +1,10 @@
 name: pipeline
 
-# Solo manual. El cron contra produccion se anadira tras el OK del CEO.
+# Cron diario 05:17 UTC contra produccion (secreto NEO_URL_PROD). Manual: solo dev o dry-run.
+# El cron solo se activa cuando este archivo esta en la rama por defecto (main).
 on:
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       entorno:
@@ -39,6 +42,13 @@ jobs:
           DATABASE_URL: ${{ secrets.NEO_URL_DEV }}
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
+          python -m jobhunting.pipeline
+      - name: Pipeline (prod)
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
           python -m jobhunting.pipeline
       - name: Pipeline (dry-run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'dry-run' }}

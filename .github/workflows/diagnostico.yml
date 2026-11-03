@@ -1,0 +1,29 @@
+name: diagnostico
+
+# Informe de estructura del XML de Feina Activa. Solo a mano, o al cambiar estos archivos
+# en una rama claude/. Sin cron, sin secretos, sin artefactos (el XML no se guarda).
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/diagnostico.yml", "scripts/diagnostico_feinaactiva.py"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnostico
+  cancel-in-progress: true
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python scripts/diagnostico_feinaactiva.py

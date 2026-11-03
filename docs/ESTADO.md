@@ -1,10 +1,11 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 3 OK)_
+_Última actualización: 2026-11-03 (Fase 4 en curso)_
 
 ## Fase actual
-**Fase 3 — Esqueleto andante: OK (CEO, 2026-11-03).** PR #8 fusionado; cron diario 05:17 UTC en prod.
-Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
+**Fase 4 — Fuentes: en curso (desde 2026-11-03).** Sonda de fuentes nuevas hecha: ver `docs/VIABILIDAD_FASE4.md`.
+Esperando al CEO para elegir la primera fuente nueva.
+OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade en el PR de la Fase 4 y se activa al fusionar.
 
 | Fase | Estado |
 |------|--------|
@@ -12,7 +13,7 @@ Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
 | 1. Fundación | OK (CEO) |
 | 2. Viabilidad | OK (CEO) |
 | 3. Esqueleto andante | OK (CEO) |
-| 4. Fuentes | Siguiente |
+| 4. Fuentes | En curso |
 | 5–9 | Sin empezar |
 
 ## Qué hay
@@ -39,6 +40,13 @@ Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
     ciudades; `huella` = empresa+título+ciudad normalizados. Repetidas NO se fusionan (pueden ser varias
     vacantes): vista `v_grupos_ofertas`; mercado en `v_mercado_ciudad_modalidad`; `recuento_diario.n_unicas`.
   - Tests: 150 (24 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
+- Fase 4:
+  - `sonda_portales.py --grupo fase2|fase4|condiciones`. fase4 prueba portales HTML, feeds XML/JSON y APIs
+    de ATS, y solo registra nombres de campo y recuentos. condiciones vuelca al log el texto de las condiciones
+    de uso de las APIs. robots.txt se comprueba en cada redirect, hay topes de lectura y, tras un 403/429,
+    se saltan las demás URLs de ese host. Un push de `sonda.yml` en `claude/**` ejecuta fase4 y luego condiciones.
+  - `pipeline.yml`: `schedule` 05:17 UTC, con un paso prod (`NEO_URL_PROD`) que solo corre en schedule.
+  - Tests: 218 (24 de BD se saltan) + 1 live.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
@@ -71,6 +79,10 @@ Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
   3. Fuentes con formatos abiertos (feeds de ofertas).
   Cada fuente nueva necesita el OK del CEO y su propia puerta.
 
+- 2026-11-03 (Fase 4, condiciones leídas desde Actions): la API de InfoJobs prohíbe los agregadores de ofertas,
+  así que no es viable. El plan gratis de Jooble da 500 peticiones de por vida, así que tampoco. Adzuna permite
+  la búsqueda personal (necesita el OK del CEO). Mejor candidata: el XML abierto de Feina Activa (Generalitat).
+
 ## Pendientes
 - Hecho (CEO, 2026-11-03): Neon free, proyecto `jobhunting` en Frankfurt (Postgres 18), ramas
   `production` y `dev` (sin auto-borrado), secretos `NEON_URL_PROD` y `NEON_URL_DEV` en GitHub.
@@ -82,7 +94,10 @@ Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
 - CEO: OK al cron diario contra Neon prod (`NEO_URL_PROD`) para cerrar la Fase 3.
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
-- CEO: decidir si se piden claves de las APIs de InfoJobs y Jooble (gratis, nuevo servicio + secreto).
-- Fase 4 (al empezar): comprobar en Actions que el cron de prod corrió bien (pipeline, evento schedule)
-  y que `recuento_diario` en la rama `production` tiene fila del día.
+- Tras fusionar el PR de la Fase 4: comprobar que el cron de prod corre (pipeline con evento schedule, 05:17 UTC)
+  y que `recuento_diario` tiene fila del día en la rama `production`. Hasta hoy no ha corrido nunca.
+- CEO: elegir la primera fuente nueva de la Fase 4. Propuesta: el XML de Feina Activa. Luego, por puertas:
+  Infoempleo, Ticjob y Jobfluent (antes, leer su aviso legal), Greenhouse/Lever por empresa (hace falta una
+  lista de slugs) y Adzuna (clave nueva).
+- Recomendado por el reviewer (lo decide el CEO): un GitHub Environment `prod` con `NEO_URL_PROD` limitado a `main`.
 - Hecho: actions a Node 24 (checkout@v5, setup-python@v6, upload-artifact@v6).
