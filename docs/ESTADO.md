@@ -1,25 +1,27 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 5 construida; falta el simulacro de la puerta)_
+_Última actualización: 2026-11-03 (Fase 5: simulacro hecho; en puerta)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
-1. Revisar y fusionar el PR de la Fase 5 (salud, alertas por issue, latido). Sin fusionar no se activa nada.
-2. En claude.ai → tareas programadas, abrir **"JobHunting reparador diario"** (08:23 UTC, creada el 2026-11-03)
-   y comprobar que tiene el repo `JJMICAR1/JobHunting` y acceso a GitHub; al crearla desde la sesión quedó sin repo
-   ni conectores. Si no los tiene, añadirlos ahí.
-3. Tras fusionar, en una sesión nueva: **"Simulacro Fase 5"**. El jefe rompe a propósito un selector en una
-   rama, se ejecuta en Neon dev, `salud` abre el issue y el reparador abre el PR de arreglo (ver `docs/REPARADOR.md`).
+1. Revisar y fusionar el PR de cierre de la Fase 5: incluye el cambio propuesto de CLAUDE.md (línea "Reparación").
+2. En la tarea "Reparador JobHunting": poner la hora a las **9:23** de Madrid (después de `salud`, 07:41 UTC) y
+   quitar los conectores Canva y Descript (no los necesita).
+3. Si todo está bien, escribir **"Fase 5 OK"**.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 5 — Salud y reparación: construida, en puerta.** Fase 4 OK (CEO, 2026-11-03).
+**Fase 5 — Salud y reparación: simulacro hecho, en puerta (falta el OK del CEO).** Fase 4 OK (CEO, 2026-11-03).
+Simulacro 2026-11-03: selector de Tecnoempleo roto a propósito → pipeline en Neon dev (0 ofertas) → `salud` abrió
+el issue #14 → arreglo con test de regresión (PR #15, hecho desde la sesión de la fase con scraper-dev) →
+pipeline en dev con el arreglo → `salud` cerró el #14 sola.
+Reparador automático: la tarea "Reparador JobHunting" (creada por el CEO en claude.ai) lee el repo y los issues
+(prueba manual: "Sin alertas"). Aún no ha reparado una alerta real por sí sola.
 El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
-Pendiente al empezar la próxima sesión: comprobar en Actions que el cron de prod corrió (evento schedule) y que
-`recuento_diario` de la rama `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
-Puerta de la Fase 5: simulacro (selector roto → alerta → PR de arreglo), tras fusionar el PR.
+Próxima sesión: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` corrió tras él y que
+`recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
@@ -45,7 +47,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 3. Esqueleto andante | OK (CEO) |
 | 4. Fuentes | OK (CEO) |
 | 4.5 Fuentes pendientes | Más adelante |
-| 5. Salud y reparación | Construida, falta el simulacro |
+| 5. Salud y reparación | Simulacro hecho, en puerta |
 | 6–9 | Sin empezar |
 
 ## Qué hay
@@ -107,7 +109,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   - `.github/workflows/salud.yml`: tras cada `pipeline` (workflow_run; prod si vino del cron, si no dev), cron 07:41 UTC
     (prod + latido) y manual. Prod solo desde `main`. Job `latido` aparte (solo `actions: write`): re-activa
     `pipeline.yml` y `salud.yml` para que GitHub no los apague a los 60 días.
-  - `docs/REPARADOR.md`: procedimiento y prompt del agente reparador (tarea programada diaria 08:23 UTC, CEO OK).
+  - `docs/REPARADOR.md`: procedimiento, prompt y lecciones del reparador (tarea programada del CEO en claude.ai).
   - Neon dev, 2026-11-03: `salud` → "todo bien", 0 issues. Tests: 612 con BD.
 
 ## Agentes activos por fase
@@ -120,6 +122,9 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 ## Decisiones
 - 2026-11-03 (CEO, Fase 5): alertas por issue de GitHub (Telegram sigue en la Fase 7); reparador = tarea
   programada diaria condicional (si no hay issues `alerta`, termina); OK a crear el workflow `salud` con cron y latido.
+- 2026-11-03 (CEO, Fase 5): el trabajo de cada fase se hace desde la sesión de la fase, con subagentes, cuidando la cuota.
+  La tarea programada se queda solo si funciona: las creadas desde una sesión no tienen repo; la del CEO, creada en
+  claude.ai con el repo, sí. Ver `docs/REPARADOR.md` → Lecciones.
 - Tests con `pytest`; CI en GitHub Actions (gratis en repo público).
 - 2026-11-03: Actions no arrancaba porque la cuenta de GitHub estaba bloqueada por facturación.
   El CEO lo resolvió y el workflow `tests` pasó en `main`. Si un job falla en 2-3 s sin log,
