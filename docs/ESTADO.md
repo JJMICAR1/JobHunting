@@ -2,6 +2,28 @@
 
 _Última actualización: 2026-11-03 (Fase 4: Feina Activa en puerta)_
 
+## Tareas del CEO (lo que tienes que hacer tú)
+_El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
+
+1. **Puerta de Feina Activa (unos 5 min).**
+   - En la consola de Neon: proyecto `jobhunting`, rama **dev**, SQL Editor. Ejecuta:
+     ```sql
+     SELECT dia, portal, n_vistas, n_nuevas, n_unicas
+     FROM recuento_diario ORDER BY dia DESC, portal;
+     ```
+     Esperado hoy: `feinaactiva` con unas 4655 ofertas y 4570 únicas; `tecnoempleo` con unas 632.
+   - Muestra de ofertas (abre 2 o 3 URLs y comprueba que llevan a la oferta real):
+     ```sql
+     SELECT titulo, empresa, ciudad, fecha_publicacion, url
+     FROM ofertas WHERE portal = 'feinaactiva' LIMIT 20;
+     ```
+   - Si cuadra, fusiona el PR #11 y escribe al jefe **"Feina Activa OK"**. Al fusionar, el cron de prod
+     (05:17 UTC) recogerá los dos portales.
+2. Opcional: **Adzuna**. Date de alta en developer.adzuna.com (gratis) y guarda la clave como secretos de
+   GitHub. Pide antes al jefe los nombres de los secretos.
+3. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
+   `NEO_URL_PROD` y limítalo a la rama `main`.
+
 ## Fase actual
 **Fase 4 — Fuentes: en curso (desde 2026-11-03).** Sonda de fuentes nuevas hecha: ver `docs/VIABILIDAD_FASE4.md`.
 PR #10 fusionado: sonda Fase 4 y cron de prod, que está activo desde el 2026-11-03 (antes no existía).
