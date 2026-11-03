@@ -21,7 +21,12 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
      (05:17 UTC) recogerá los dos portales.
 2. Opcional: **Adzuna**. Date de alta en developer.adzuna.com (gratis) y guarda la clave como secretos de
    GitHub. Pide antes al jefe los nombres de los secretos.
-3. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
+3. **Decidir sobre Jobfluent** (portal tech de Barcelona, unas 34 ofertas). Su aviso legal no prohíbe el acceso
+   automatizado, pero dice que no se ceden derechos de explotación de los contenidos. Guardaríamos solo la ficha
+   ligera (título, empresa, url) para uso personal. ¿Sí o no?
+4. **Infoempleo:** su aviso legal no se puede leer de forma automática. Si quieres esta fuente, ábrelo tú
+   (infoempleo.com/avisolegal/) y dime si dice algo sobre robots o la extracción de datos.
+5. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
    `NEO_URL_PROD` y limítalo a la rama `main`.
 
 ## Fase actual
@@ -119,6 +124,8 @@ y espera su puerta: que el CEO revise y fusione el PR.
   3. Fuentes con formatos abiertos (feeds de ofertas).
   Cada fuente nueva necesita el OK del CEO y su propia puerta.
 
+- 2026-11-03 (Fase 4, avisos legales): Talent.com prohíbe el scraping y Ticjob prohíbe descargar la web: los dos
+  quedan descartados. Jobfluent está en zona gris (lo decide el CEO). Infoempleo no se pudo leer. Ver `docs/VIABILIDAD_FASE4.md` §4.
 - 2026-11-03 (Fase 4, condiciones leídas desde Actions): la API de InfoJobs prohíbe los agregadores de ofertas,
   así que no es viable. El plan gratis de Jooble da 500 peticiones de por vida, así que tampoco. Adzuna permite
   la búsqueda personal (necesita el OK del CEO). Mejor candidata: el XML abierto de Feina Activa (Generalitat).
