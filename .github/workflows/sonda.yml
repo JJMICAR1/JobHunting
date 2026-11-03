@@ -1,0 +1,28 @@
+name: sonda
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/sonda_portales.py
+      - .github/workflows/sonda.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python scripts/sonda_portales.py
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: sonda
+          path: sonda.json
+          if-no-files-found: warn
