@@ -93,7 +93,7 @@ def parsear_listado(html: str) -> ResultadoListado:
     h1 = soup.find("h1")
     m = _RE_TOTAL.match(h1.get_text()) if h1 else None
     total = int(m.group(1).replace(".", "")) if m else None
-    tarjetas = [d for d in soup.find_all("div", class_="bg-white")
+    tarjetas = [d for d in soup.find_all("div", class_="bg-blanco")
                 if {"p-3", "border", "rounded", "mb-3"} <= set(d.get("class", []))
                 and "location.href" in (d.get("onclick") or "")]
     if not tarjetas and m is None:
