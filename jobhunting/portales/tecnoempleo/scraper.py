@@ -17,6 +17,7 @@ class ResultadoRecorrido:
     paginas: int = 0
     total_anunciado: int | None = None
     n_descartadas: int = 0
+    motivos_descarte: dict = field(default_factory=dict)
     bloqueado: bool = False
     motivo_parada: str = ""   # fin | max_paginas | bloqueado | sin_nuevas
     detalle: str | None = None
@@ -42,6 +43,8 @@ def recorrer(fetch=descargar, max_paginas: int = 30, pausa_s: float = 5,
         pag = parsear_listado(html)
         res.paginas += 1
         res.n_descartadas += pag.n_descartadas
+        for k, v in pag.motivos_descarte.items():
+            res.motivos_descarte[k] = res.motivos_descarte.get(k, 0) + v
         if res.total_anunciado is None:
             res.total_anunciado = pag.total_anunciado
         nuevas = [o for o in pag.ofertas if o.clave not in vistos]

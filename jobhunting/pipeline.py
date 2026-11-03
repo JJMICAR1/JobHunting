@@ -30,6 +30,8 @@ def _resumen(estado, rec, n_nuevas, n_vistas, extra=None) -> str:
               f"- total_anunciado: {rec.total_anunciado if rec else None}",
               f"- n_descartadas: {rec.n_descartadas if rec else 0}",
               f"- parada: {rec.motivo_parada if rec else '-'}"]
+    if rec and rec.motivos_descarte:
+        lineas += [f"  - descarte: {k} x{v}" for k, v in sorted(rec.motivos_descarte.items())]
     if rec and rec.total_anunciado and abs(n - rec.total_anunciado) > 0.10 * rec.total_anunciado:
         lineas.append(f"- AVISO: n_ofertas ({n}) difiere >10% del total anunciado "
                       f"({rec.total_anunciado})")

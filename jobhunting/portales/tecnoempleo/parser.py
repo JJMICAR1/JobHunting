@@ -27,6 +27,7 @@ class ResultadoListado:
     total_anunciado: int | None = None
     url_siguiente: str | None = None
     n_descartadas: int = 0
+    motivos_descarte: dict = field(default_factory=dict)  # motivo -> n (sin datos de la oferta)
 
 
 def _txt(s: str | None) -> str:
@@ -92,8 +93,10 @@ def parsear_listado(html: str) -> ResultadoListado:
     for t in tarjetas:
         try:
             o = _ficha(t)
-        except (OfertaInvalida, KeyError, TypeError):
+        except (OfertaInvalida, KeyError, TypeError) as e:
             res.n_descartadas += 1
+            motivo = f"{type(e).__name__}: {e}"[:80]
+            res.motivos_descarte[motivo] = res.motivos_descarte.get(motivo, 0) + 1
             continue
         if o.clave not in vistos:  # dedup dentro de la página
             vistos.add(o.clave)
