@@ -7,16 +7,15 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
 
 1. En la tarea "Reparador JobHunting" (claude.ai/code → Routines): poner la hora a las **9:23** de Madrid y quitar los
    conectores Canva y Descript, si aún no está hecho.
-2. Crear el bot de Telegram con @BotFather y guardar los secretos `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en GitHub
-   (chat_id: escribir al bot y abrir `https://api.telegram.org/bot<TOKEN>/getUpdates` en el navegador). No pegarlos en el chat.
-3. Lanzar a mano el workflow `mercado` (entorno dev, rama `claude/fase-6-m7qih6`) y comprobar que llega el mensaje "[dev] Mercado ...".
-4. Revisar y fusionar el PR de la Fase 6; al día siguiente debe llegar el mensaje de prod tras el cron. Si está bien: "Fase 6 OK".
+2. Revisar y fusionar el PR de la Fase 6; al día siguiente debe llegar el mensaje de prod tras el cron. Si está bien: "Fase 6 OK".
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
 **Fase 6 — Control de mercado: construida (2026-11-03), falta la puerta del CEO.**
 Puerta propuesta: el CEO recibe en Telegram el recuento de dev (manual) y, tras fusionar, el de prod tras el cron.
+2026-11-03: bot creado y secretos `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` guardados; `mercado` en dev enviado a Telegram (ok).
+Si Telegram responde 401: el secreto del token está mal (sin `bot` delante, sin espacios, o token revocado).
 Al empezar la siguiente sesión: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` y `mercado`
 corrieron tras él y que `recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
 
