@@ -1,26 +1,25 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 5: simulacro hecho; en puerta)_
+_Última actualización: 2026-11-03 (Fase 5 OK; siguiente Fase 6)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
-1. Revisar y fusionar el PR de cierre de la Fase 5: incluye el cambio propuesto de CLAUDE.md (línea "Reparación").
-2. En la tarea "Reparador JobHunting": poner la hora a las **9:23** de Madrid (después de `salud`, 07:41 UTC) y
-   quitar los conectores Canva y Descript (no los necesita).
-3. Si todo está bien, escribir **"Fase 5 OK"**.
+1. En la tarea "Reparador JobHunting" (claude.ai/code → Routines): poner la hora a las **9:23** de Madrid y quitar los
+   conectores Canva y Descript, si aún no está hecho.
+2. Abrir una sesión nueva y escribir **"Empezamos la Fase 6"**.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 5 — Salud y reparación: simulacro hecho, en puerta (falta el OK del CEO).** Fase 4 OK (CEO, 2026-11-03).
+**Fase 5 — Salud y reparación: OK (CEO, 2026-11-03).** Siguiente: **Fase 6 — Control de mercado** (vistas SQL y recuento por Telegram).
 Simulacro 2026-11-03: selector de Tecnoempleo roto a propósito → pipeline en Neon dev (0 ofertas) → `salud` abrió
 el issue #14 → arreglo con test de regresión (PR #15, hecho desde la sesión de la fase con scraper-dev) →
 pipeline en dev con el arreglo → `salud` cerró el #14 sola.
 Reparador automático: la tarea "Reparador JobHunting" (creada por el CEO en claude.ai) lee el repo y los issues
 (prueba manual: "Sin alertas"). Aún no ha reparado una alerta real por sí sola.
 El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
-Próxima sesión: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` corrió tras él y que
+Al empezar la Fase 6: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` corrió tras él y que
 `recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
@@ -47,8 +46,9 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 3. Esqueleto andante | OK (CEO) |
 | 4. Fuentes | OK (CEO) |
 | 4.5 Fuentes pendientes | Más adelante |
-| 5. Salud y reparación | Simulacro hecho, en puerta |
-| 6–9 | Sin empezar |
+| 5. Salud y reparación | OK (CEO) |
+| 6. Control de mercado | Siguiente |
+| 7–9 | Sin empezar |
 
 ## Qué hay
 - `.claude/agents/`: scraper-dev, tester, db-engineer, ml-engineer, devops, reviewer
