@@ -1,20 +1,25 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 4 OK; siguiente Fase 5)_
+_Última actualización: 2026-11-03 (Fase 5 construida; falta el simulacro de la puerta)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
-1. Abrir una sesión nueva y escribir **"Empezamos la Fase 5"**.
+1. Revisar y fusionar el PR de la Fase 5 (salud, alertas por issue, latido). Sin fusionar no se activa nada.
+2. En claude.ai → tareas programadas, abrir **"JobHunting reparador diario"** (08:23 UTC, creada el 2026-11-03)
+   y comprobar que tiene el repo `JJMICAR1/JobHunting` y acceso a GitHub; al crearla desde la sesión quedó sin repo
+   ni conectores. Si no los tiene, añadirlos ahí.
+3. Tras fusionar, en una sesión nueva: **"Simulacro Fase 5"**. El jefe rompe a propósito un selector en una
+   rama, se ejecuta en Neon dev, `salud` abre el issue y el reparador abre el PR de arreglo (ver `docs/REPARADOR.md`).
 
-Nada más es urgente. Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para hacerlo más adelante.
+Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 4 — Fuentes: OK (CEO, 2026-11-03).** Cerrada con Tecnoempleo y Feina Activa (PR #10 y #11 fusionados).
-El cron de prod está activo desde el 2026-11-03 (05:17 UTC, los dos portales); su primera ejecución es el 2026-11-04.
-**Siguiente: Fase 5 — Salud y reparación**, en una sesión nueva.
-Al empezar la Fase 5, lo primero: comprobar en Actions que el cron de prod corrió (evento schedule) y que
-`recuento_diario` de la rama `production` tiene fila de hoy para `tecnoempleo` y `feinaactiva`.
+**Fase 5 — Salud y reparación: construida, en puerta.** Fase 4 OK (CEO, 2026-11-03).
+El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
+Pendiente al empezar la próxima sesión: comprobar en Actions que el cron de prod corrió (evento schedule) y que
+`recuento_diario` de la rama `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
+Puerta de la Fase 5: simulacro (selector roto → alerta → PR de arreglo), tras fusionar el PR.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
@@ -40,7 +45,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 3. Esqueleto andante | OK (CEO) |
 | 4. Fuentes | OK (CEO) |
 | 4.5 Fuentes pendientes | Más adelante |
-| 5. Salud y reparación | Siguiente |
+| 5. Salud y reparación | Construida, falta el simulacro |
 | 6–9 | Sin empezar |
 
 ## Qué hay
@@ -92,6 +97,19 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
     4570 puestos únicos. 2.ª ejecución, 1 nueva (idempotente). Tecnoempleo 632, sin cambios.
   - Tests: 514 con BD.
 
+- Fase 5:
+  - `jobhunting/salud.py` (`python -m jobhunting.salud --entorno prod|dev`): evalúa las últimas ejecuciones por portal
+    (solo lee, no migra). Alertas: `sin_ejecucion` (>28 h, solo prod), `error`, `bloqueado`, `cero`,
+    `caida` (<50 % de la mediana de 3-7 ejecuciones ok previas), `descartes` (>10 %), `incompleto` (<80 % del anunciado).
+  - `jobhunting/alertas.py`: un issue por alerta (`[alerta][prod|dev] <portal>: <tipo>`, etiquetas `alerta` y
+    `entorno:*`). Idempotente; se cierra solo al desaparecer. El detalle se limpia (sin URLs ni HTML, 200 car.).
+  - Migración 003: `ejecuciones.n_descartadas` y `total_anunciado` (los guarda el pipeline).
+  - `.github/workflows/salud.yml`: tras cada `pipeline` (workflow_run; prod si vino del cron, si no dev), cron 07:41 UTC
+    (prod + latido) y manual. Prod solo desde `main`. Job `latido` aparte (solo `actions: write`): re-activa
+    `pipeline.yml` y `salud.yml` para que GitHub no los apague a los 60 días.
+  - `docs/REPARADOR.md`: procedimiento y prompt del agente reparador (tarea programada diaria 08:23 UTC, CEO OK).
+  - Neon dev, 2026-11-03: `salud` → "todo bien", 0 issues. Tests: 612 con BD.
+
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.
@@ -100,6 +118,8 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 - Fase 8: ml-engineer.
 
 ## Decisiones
+- 2026-11-03 (CEO, Fase 5): alertas por issue de GitHub (Telegram sigue en la Fase 7); reparador = tarea
+  programada diaria condicional (si no hay issues `alerta`, termina); OK a crear el workflow `salud` con cron y latido.
 - Tests con `pytest`; CI en GitHub Actions (gratis en repo público).
 - 2026-11-03: Actions no arrancaba porque la cuenta de GitHub estaba bloqueada por facturación.
   El CEO lo resolvió y el workflow `tests` pasó en `main`. Si un job falla en 2-3 s sin log,

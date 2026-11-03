@@ -132,14 +132,15 @@ def registrar_recuento(conn: psycopg.Connection, dia: date, portal: str) -> tupl
 
 
 def registrar_ejecucion(conn: psycopg.Connection, portal: str, inicio: datetime, fin: datetime,
-                        estado: str, n_ofertas: int = 0, detalle: str | None = None) -> int:
+                        estado: str, n_ofertas: int = 0, detalle: str | None = None,
+                        n_descartadas: int = 0, total_anunciado: int | None = None) -> int:
     _utc(inicio, "inicio")
     _utc(fin, "fin")
     if estado not in ESTADOS:
         raise ValueError(f"estado debe ser uno de {ESTADOS}")
     with conn.transaction():
         return conn.execute(
-            "INSERT INTO ejecuciones (portal, inicio, fin, estado, n_ofertas, detalle) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (portal, inicio, fin, estado, n_ofertas, detalle),
+            "INSERT INTO ejecuciones (portal, inicio, fin, estado, n_ofertas, detalle, "
+            "n_descartadas, total_anunciado) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (portal, inicio, fin, estado, n_ofertas, detalle, n_descartadas, total_anunciado),
         ).fetchone()[0]
