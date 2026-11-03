@@ -35,7 +35,7 @@ def cuerpo(alerta, entorno: str) -> str:
     return (f"**Portal:** `{alerta.portal}`  \n**Tipo:** `{alerta.tipo}`  \n**Entorno:** `{entorno}`\n\n"
             f"{alerta.mensaje}\n\n"
             f"Detectado por el workflow `salud`: {_enlace_ejecucion()}\n\n"
-            "El agente reparador lo atiende según `docs/REPARADOR.md` (rama `claude/`, PR para el CEO). "
+            "Lo atiende la tarea programada \"Reparador JobHunting\" según `docs/REPARADOR.md` (rama `claude/`, PR para el CEO). "
             "Este issue se cierra solo cuando la alerta desaparece.\n")
 
 
