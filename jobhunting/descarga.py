@@ -47,6 +47,17 @@ def robots_permitido(url: str) -> bool:
     return True if rp is None else rp.can_fetch(USER_AGENT, url)
 
 
+def crawl_delay(url: str) -> float:
+    """Crawl-delay de robots.txt para nuestro agente (0 si no hay)."""
+    p = urlparse(url)
+    origen = f"{p.scheme}://{p.netloc}"
+    if origen not in _robots:
+        _robots[origen] = _cargar_robots(origen)
+    rp = _robots[origen]
+    d = rp.crawl_delay(USER_AGENT) if rp is not None else None
+    return float(d or 0)
+
+
 def descargar(url: str) -> str:
     if not robots_permitido(url):
         raise Bloqueado("prohibido por robots.txt")
@@ -64,6 +75,10 @@ def descargar(url: str) -> str:
             pass
     except Exception as e:
         raise ErrorDescarga(f"fallo de red: {type(e).__name__}")
+    if final and urlparse(final).netloc != urlparse(url).netloc:
+        raise Bloqueado("redireccion a otro host")
+    if final and final != url and not robots_permitido(final):
+        raise Bloqueado("redireccion prohibida por robots.txt")
     # esperadas=["x"] es irrelevante: solo nos interesa bloqueado/login/error HTTP
     estado, senales = clasificar(status, final, html, esperadas=[""])
     if estado == "bloqueado":

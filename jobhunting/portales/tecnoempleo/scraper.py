@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from jobhunting.descarga import Bloqueado, descargar
+from jobhunting.descarga import Bloqueado, descargar, crawl_delay
 from jobhunting.modelo import Oferta, deduplicar
 from jobhunting.portales.tecnoempleo.parser import parsear_listado
 
@@ -34,7 +34,8 @@ def recorrer(fetch=descargar, max_paginas: int = 30, pausa_s: float = 5,
             res.motivo_parada = "max_paginas"
             break
         if res.paginas:
-            sleep(pausa_s)
+            # Con la descarga real se respeta el Crawl-delay de robots.txt si es mayor.
+            sleep(max(pausa_s, crawl_delay(url)) if fetch is descargar else pausa_s)
         try:
             html = fetch(url)
         except Bloqueado as e:
