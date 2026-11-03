@@ -37,7 +37,6 @@ jobs:
     permissions:
       contents: read
       issues: write     # abrir/cerrar issues de alerta
-      actions: write    # latido: re-activar los workflows con cron
     steps:
       # En workflow_run se usa el codigo de main (nunca el de la rama que disparo el pipeline).
       - uses: actions/checkout@v5
@@ -55,6 +54,7 @@ jobs:
         run: |
           case "$EVENTO" in
             schedule) E=prod; H=28 ;;
+            # El pipeline solo escribe en prod cuando lo lanza el cron; cualquier otro evento es dev.
             workflow_run) if [ "$EVENTO_PIPELINE" = schedule ]; then E=prod; H=28; else E=dev; H=0; fi ;;
             workflow_dispatch) E="$ENTORNO_MANUAL"; if [ "$E" = prod ]; then H=28; else H=0; fi ;;
             *) E=dev; H=0 ;;
@@ -71,7 +71,8 @@ jobs:
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
           python -m jobhunting.salud --entorno dev --max-horas "$MAX_HORAS"
       - name: Salud (prod)
-        if: steps.env.outputs.entorno == 'prod'
+        # Prod solo con el codigo de main (un dispatch desde una rama claude/ no llega a prod).
+        if: steps.env.outputs.entorno == 'prod' && github.ref == 'refs/heads/main'
         env:
           DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -79,8 +80,16 @@ jobs:
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
           python -m jobhunting.salud --entorno prod --max-horas "$MAX_HORAS"
-      - name: Latido (re-activar workflows con cron)
-        if: github.event_name == 'schedule'
+
+  # Job aparte: corre aunque falle la salud y es el unico con actions: write.
+  latido:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write    # re-activar los workflows con cron (nada mas)
+    steps:
+      - name: Re-activar workflows con cron
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

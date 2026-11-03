@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import statistics
 import sys
 from dataclasses import dataclass
@@ -54,6 +55,16 @@ def _utc(d: datetime) -> datetime:
     return d
 
 
+def _limpiar(detalle: str | None) -> str:
+    """El detalle va a un issue PÚBLICO: sin URLs ni HTML, una línea y como mucho 200 caracteres."""
+    if not detalle:
+        return "sin detalle"
+    t = re.sub(r"https?://\S+", "<url>", detalle)
+    t = re.sub(r"[<>`]", "", t.replace("<url>", "[url]"))
+    t = " ".join(t.split())
+    return t[:200] + ("…" if len(t) > 200 else "")
+
+
 def evaluar_portal(portal: str, ejecuciones, ahora: datetime, max_horas: float | None = MAX_HORAS) -> list[Alerta]:
     """Alertas de un portal. `ejecuciones`: todas las del portal, en cualquier orden.
     max_horas=None desactiva la comprobación de latido (p. ej. en dev, que no tiene cron)."""
@@ -70,10 +81,10 @@ def evaluar_portal(portal: str, ejecuciones, ahora: datetime, max_horas: float |
                        f"La última ejecución terminó hace {horas:.0f} h ({ult.fin:%Y-%m-%d %H:%M} UTC); "
                        f"el máximo es {max_horas:g} h. ¿Se ha desactivado o retrasado el cron?")]
     if ult.estado == "error":
-        return [Alerta(portal, "error", f"La última ejecución falló: {ult.detalle or 'sin detalle'}.")]
+        return [Alerta(portal, "error", f"La última ejecución falló: {_limpiar(ult.detalle)}.")]
     if ult.estado == "bloqueado":
         return [Alerta(portal, "bloqueado",
-                       f"El portal bloqueó la descarga: {ult.detalle or 'sin detalle'}. "
+                       f"El portal bloqueó la descarga: {_limpiar(ult.detalle)}. "
                        "No se reintenta ni se salta la protección (regla 7).")]
     alertas = []
     n = ult.n_ofertas
@@ -107,16 +118,21 @@ def evaluar(ejecuciones, ahora: datetime, portales=PORTALES, max_horas: float | 
 
 
 def cargar_ejecuciones(conn, portales=PORTALES, por_portal: int = VENTANA + 1) -> list[Ejecucion]:
-    """Las `por_portal` ejecuciones más recientes de cada portal."""
-    filas = conn.execute(
-        """
-        SELECT portal, fin, estado, n_ofertas, detalle, n_descartadas, total_anunciado FROM (
+    """Las `por_portal` ejecuciones más recientes de cada portal. Solo lee (no migra: la BD de prod
+    solo la cambia el pipeline). Si aún no está la migración 003, n_descartadas=0 y total_anunciado=None."""
+    import psycopg
+
+    sql = """
+        SELECT portal, fin, estado, n_ofertas, detalle, {extra} FROM (
             SELECT *, row_number() OVER (PARTITION BY portal ORDER BY fin DESC) AS rn
             FROM ejecuciones WHERE portal = ANY(%s)
         ) t WHERE rn <= %s
-        """,
-        (list(portales), por_portal),
-    ).fetchall()
+    """
+    params = (list(portales), por_portal)
+    try:
+        filas = conn.execute(sql.format(extra="n_descartadas, total_anunciado"), params).fetchall()
+    except psycopg.errors.UndefinedColumn:
+        filas = conn.execute(sql.format(extra="0, NULL::integer"), params).fetchall()
     return [Ejecucion(*f) for f in filas]
 
 
@@ -144,7 +160,6 @@ def main(argv=None, ahora=None, github=None) -> int:
     try:
         conn = db.conectar(url)
         try:
-            db.migrar(conn)
             ejs = cargar_ejecuciones(conn)
         finally:
             conn.close()
