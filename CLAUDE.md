@@ -51,7 +51,8 @@ y puntuar las ofertas según los Sí/No del CEO. Todo en la nube y casi gratis.
 - Ejecución diaria: GitHub Actions (cron) con Python determinista. Cero uso de Claude.
 - Base de datos: Neon free (0,5 GB). Ficha ligera por oferta; descripción solo de candidatas.
   Los agentes trabajan en la rama `dev` de Neon; producción solo la toca el pipeline.
-- Reparación: alerta -> tarea programada de Claude (disparador API) -> abre PR -> el CEO revisa.
+- Reparación: alerta (issue `alerta`) -> el CEO abre la sesión de la fase -> el jefe repara con subagentes
+  (`docs/REPARADOR.md`) -> abre PR -> el CEO revisa. Sin tareas programadas de Claude (cuota de sesión).
 - Avisos y etiquetado: Telegram (dónde alojar el bot se decide en la Fase 7).
 
 ## Agentes (permisos mínimos; activar solo los de la fase)
