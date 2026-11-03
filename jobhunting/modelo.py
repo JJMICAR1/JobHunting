@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
+MODALIDADES = frozenset({"presencial", "hibrido", "remoto"})
+
+
 class OfertaInvalida(ValueError):
     pass
 
@@ -19,9 +22,17 @@ class Oferta:
     ubicacion: str | None = None
     fecha_publicacion: datetime | None = None   # UTC, tz-aware
     capturada_en: datetime | None = None        # UTC, tz-aware (lo pone el pipeline)
+    ciudad: str | None = None                   # normalizada; None si ámbito nacional/remoto
+    modalidad: str | None = None                # presencial | hibrido | remoto | None
 
     def __post_init__(self):
         validar(self)
+
+    @property
+    def huella(self) -> str:
+        """Identifica el puesto (empresa+título+ciudad); repetidas = posibles varias vacantes."""
+        from jobhunting.normalizar import huella
+        return huella(self.empresa, self.titulo, self.ciudad)
 
     @property
     def clave(self) -> tuple[str, str]:
@@ -43,6 +54,8 @@ def validar(o: Oferta) -> None:
         raise OfertaInvalida("url debe ser https")
     if len(o.titulo) > 300:
         raise OfertaInvalida("titulo demasiado largo")
+    if o.modalidad is not None and o.modalidad not in MODALIDADES:
+        raise OfertaInvalida(f"modalidad inválida: {o.modalidad!r}")
     for campo in ("fecha_publicacion", "capturada_en"):
         d = getattr(o, campo)
         if d is not None and (not isinstance(d, datetime) or not _es_utc(d)):

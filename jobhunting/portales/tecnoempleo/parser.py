@@ -9,6 +9,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 from bs4 import BeautifulSoup
 
 from jobhunting.modelo import Oferta, OfertaInvalida
+from jobhunting.normalizar import separar_ubicacion
 
 PORTAL = "tecnoempleo"
 BASE = "https://www.tecnoempleo.com/"
@@ -52,6 +53,11 @@ def _ficha(tarjeta) -> Oferta:
     titulo = _txt(a.get("title") or a.get_text())
     emp = tarjeta.select_one("a.text-primary.link-muted")
     empresa = _txt(emp.get_text()) if emp else None
+    if not empresa:
+        img = tarjeta.find("img", alt=True) or tarjeta.find("img", title=True)
+        if img is not None:
+            alt = _txt(img.get("alt") or img.get("title"))
+            empresa = re.sub(r"^Logo\s+", "", alt, flags=re.I).strip() or None
     ubicacion, fecha = None, None
     span = tarjeta.select_one("span.d-block.d-lg-none")
     if span:
@@ -80,8 +86,10 @@ def _ficha(tarjeta) -> Oferta:
                 fecha = datetime(y, mth, d, tzinfo=timezone.utc)
             except ValueError:
                 fecha = None
+    ciudad, modalidad = separar_ubicacion(ubicacion)
     return Oferta(portal=PORTAL, id_portal=m.group(0), titulo=titulo, url=url,
-                  empresa=empresa or None, ubicacion=ubicacion or None, fecha_publicacion=fecha)
+                  empresa=empresa or None, ubicacion=ubicacion or None, fecha_publicacion=fecha,
+                  ciudad=ciudad, modalidad=modalidad)
 
 
 def parsear_listado(html: str) -> ResultadoListado:
