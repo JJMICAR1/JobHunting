@@ -32,7 +32,7 @@ def test_migracion_003_conserva_filas_antiguas(conn):
         conn.execute("INSERT INTO schema_migraciones (version) VALUES (%s)", (v,))
     conn.execute("INSERT INTO ejecuciones (portal,inicio,fin,estado,n_ofertas) "
                  "VALUES ('tecnoempleo',%s,%s,'ok',5)", (T, T))
-    assert db.migrar(conn) == ["003_ejecuciones_salud"]
+    assert db.migrar(conn) == ["003_ejecuciones_salud", "004_mercado"]
     assert conn.execute("SELECT n_ofertas, n_descartadas, total_anunciado FROM ejecuciones").fetchone() \
         == (5, 0, None)
 
