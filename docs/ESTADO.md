@@ -26,7 +26,10 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    ligera (título, empresa, url) para uso personal. ¿Sí o no?
 4. **Infoempleo:** su aviso legal no se puede leer de forma automática. Si quieres esta fuente, ábrelo tú
    (infoempleo.com/avisolegal/) y dime si dice algo sobre robots o la extracción de datos.
-5. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
+5. **Cerrar la Fase 4:** el jefe recomienda escribir **"Fase 4 OK"** con Tecnoempleo y Feina Activa. Jobfluent,
+   Greenhouse y Adzuna se pueden añadir más adelante, cada una con su puerta. Después, abrir una sesión nueva:
+   "Empezamos la Fase 5".
+6. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
    `NEO_URL_PROD` y limítalo a la rama `main`.
 
 ## Fase actual
