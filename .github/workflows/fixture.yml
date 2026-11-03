@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "URL de Tecnoempleo a capturar"
+        description: "URLs de Tecnoempleo (hasta 3, separadas por espacios)"
         required: false
-        default: "https://www.tecnoempleo.com/ofertas-trabajo/?provincia=9"
+        default: "https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276, https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276,&pagina=2"
   push:
     branches: ["claude/**"]
     paths: [".github/workflows/fixture.yml"]
@@ -27,10 +27,10 @@ jobs:
           python-version: "3.12"
       - run: python scripts/captura_fixture.py "${URL}"
         env:
-          URL: ${{ inputs.url || 'https://www.tecnoempleo.com/ofertas-trabajo/?provincia=9' }}
+          URL: ${{ inputs.url || 'https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276, https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276,&pagina=2' }}
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: fixture
-          path: fixture.html
+          path: fixture_*.html
           if-no-files-found: warn
