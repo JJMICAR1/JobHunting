@@ -6,7 +6,10 @@ _Última actualización: 2026-11-03 (Fase 5 construida; falta el simulacro de la
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
 1. Revisar y fusionar el PR de la Fase 5 (salud, alertas por issue, latido). Sin fusionar no se activa nada.
-2. Tras fusionar, en una sesión nueva: **"Simulacro Fase 5"**. El jefe rompe a propósito un selector en una
+2. En claude.ai → tareas programadas, abrir **"JobHunting reparador diario"** (08:23 UTC, creada el 2026-11-03)
+   y comprobar que tiene el repo `JJMICAR1/JobHunting` y acceso a GitHub; al crearla desde la sesión quedó sin repo
+   ni conectores. Si no los tiene, añadirlos ahí.
+3. Tras fusionar, en una sesión nueva: **"Simulacro Fase 5"**. El jefe rompe a propósito un selector en una
    rama, se ejecuta en Neon dev, `salud` abre el issue y el reparador abre el PR de arreglo (ver `docs/REPARADOR.md`).
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
