@@ -28,7 +28,7 @@ def test_migracion_001_a_002_conserva_filas(conn):
         conn.execute("INSERT INTO ofertas (portal,id_portal,titulo,url,empresa,ubicacion,primera_vez,ultima_vez) "
                      "VALUES ('tecnoempleo',%s,'T','https://x/y','E','Barcelona',%s,%s)", (f"rf-{i}", T1, T1))
     conn.execute("INSERT INTO recuento_diario (dia,portal,n_vistas,n_nuevas) VALUES ('2026-11-03','tecnoempleo',3,3)")
-    assert db.migrar(conn) == ["002_ciudad_modalidad_huella"]
+    assert db.migrar(conn) == ["002_ciudad_modalidad_huella", "003_ejecuciones_salud"]
     assert conn.execute("SELECT count(*) FROM ofertas").fetchone()[0] == 3
     assert conn.execute("SELECT count(*) FROM ofertas WHERE ciudad IS NULL AND modalidad IS NULL "
                         "AND huella IS NULL").fetchone()[0] == 3

@@ -26,11 +26,11 @@ def esquema(conn):
 
 def test_migrar_dos_veces(conn):
     nuevas = db.migrar(conn)
-    assert nuevas == ["001_inicial", "002_ciudad_modalidad_huella"]
+    assert nuevas == ["001_inicial", "002_ciudad_modalidad_huella", "003_ejecuciones_salud"]
     e1 = esquema(conn)
     assert db.migrar(conn) == []
     assert esquema(conn) == e1
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 2
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 3
     tablas = {r[0] for r in e1}
     assert {"ofertas", "recuento_diario", "ejecuciones", "schema_migraciones"} <= tablas
 
