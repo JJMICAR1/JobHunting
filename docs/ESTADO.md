@@ -1,11 +1,12 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 4 en curso)_
+_Última actualización: 2026-11-03 (Fase 4: Feina Activa en puerta)_
 
 ## Fase actual
 **Fase 4 — Fuentes: en curso (desde 2026-11-03).** Sonda de fuentes nuevas hecha: ver `docs/VIABILIDAD_FASE4.md`.
-Esperando al CEO para elegir la primera fuente nueva.
-OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade en el PR de la Fase 4 y se activa al fusionar.
+PR #10 fusionado: sonda Fase 4 y cron de prod, que está activo desde el 2026-11-03 (antes no existía).
+Primera fuente nueva: **Feina Activa** (XML abierto de la Generalitat). Está construida y probada en Neon dev,
+y espera su puerta: que el CEO revise y fusione el PR.
 
 | Fase | Estado |
 |------|--------|
@@ -47,6 +48,19 @@ OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade e
     se saltan las demás URLs de ese host. Un push de `sonda.yml` en `claude/**` ejecuta fase4 y luego condiciones.
   - `pipeline.yml`: `schedule` 05:17 UTC, con un paso prod (`NEO_URL_PROD`) que solo corre en schedule.
   - Tests: 218 (24 de BD se saltan) + 1 live.
+- Fase 4, fuente Feina Activa:
+  - `jobhunting/portales/feinaactiva/`: un GET diario de unos 7 MB a `feinaactiva.gencat.cat/api/offers/offers-xml`.
+    Grupos `feinaactiva` (unas 3980) y `sicas` (668, del SOC). Ficha ligera: id, título, empresa, ciudad/región,
+    fecha (medianoche de Madrid pasada a UTC), url y modalidad. NO se guardan content, requisitos ni salarios.
+  - `jobhunting/xml_seguro.py`: rechaza DOCTYPE/ENTITY y tiene topes de bytes y de tiempo.
+    `descarga.descargar_bytes`: `_Redireccion` NO sigue saltos a otro host y comprueba robots.txt antes de cada
+    salto (también para Tecnoempleo; como mucho 3 saltos).
+  - Pipeline multi-portal: `--portal tecnoempleo|feinaactiva|todos` (por defecto todos). Cada portal es
+    independiente y el código de salida es el peor. El cron ejecuta todos.
+  - Licencia: reutilización libre citando la fuente (Generalitat de Catalunya, Feina Activa) y la fecha de
+    actualización, sin desnaturalizar la información (Ley 37/2007).
+  - `scripts/diagnostico_feinaactiva.py` + workflow `diagnostico`: muestra la estructura del XML sin valores.
+  - Tests: 505 con BD (470 + 35 que se saltan sin BD).
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
@@ -94,9 +108,9 @@ OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade e
 - CEO: OK al cron diario contra Neon prod (`NEO_URL_PROD`) para cerrar la Fase 3.
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
-- Tras fusionar el PR de la Fase 4: comprobar que el cron de prod corre (pipeline con evento schedule, 05:17 UTC)
+- Siguiente sesión: comprobar que el cron de prod corre (pipeline con evento schedule, 05:17 UTC)
   y que `recuento_diario` tiene fila del día en la rama `production`. Hasta hoy no ha corrido nunca.
-- CEO: elegir la primera fuente nueva de la Fase 4. Propuesta: el XML de Feina Activa. Luego, por puertas:
+- CEO: puerta de Feina Activa (revisar el recuento en Neon dev y fusionar el PR). Siguientes candidatas, por puertas:
   Infoempleo, Ticjob y Jobfluent (antes, leer su aviso legal), Greenhouse/Lever por empresa (hace falta una
   lista de slugs) y Adzuna (clave nueva).
 - Recomendado por el reviewer (lo decide el CEO): un GitHub Environment `prod` con `NEO_URL_PROD` limitado a `main`.
