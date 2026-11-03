@@ -62,6 +62,15 @@ Siguiente: Fase 4 — fuentes una a una, en una sesión nueva.
   (sin la N); el código usa esos nombres. Commit explícito: `db.conectar` abre en autocommit.
 - Test local en la nube: Postgres 16 del contenedor (`/usr/lib/postgresql/16/bin`), usar `python3 -m pytest`.
 
+- 2026-11-03 (CEO, plan de la Fase 4): NO se construye nada que salte captchas, Cloudflare u otras
+  protecciones (regla 7, riesgo legal, coste). La Fase 4 combina:
+  1. APIs oficiales gratuitas de InfoJobs y Jooble: el jefe revisa primero sus condiciones de uso
+     (límites, si permiten guardar datos) y luego el CEO da de alta las claves como secretos.
+  2. Sonda de portales nuevos que se dejen leer (portales públicos de empleo, webs catalanas, páginas
+     de empleo de empresas), con su tabla funciona/bloqueado como en la Fase 2.
+  3. Fuentes con formatos abiertos (feeds de ofertas).
+  Cada fuente nueva necesita el OK del CEO y su propia puerta.
+
 ## Pendientes
 - Hecho (CEO, 2026-11-03): Neon free, proyecto `jobhunting` en Frankfurt (Postgres 18), ramas
   `production` y `dev` (sin auto-borrado), secretos `NEON_URL_PROD` y `NEON_URL_DEV` en GitHub.
