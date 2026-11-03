@@ -1,17 +1,17 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 2 OK)_
+_Última actualización: 2026-11-03 (Fase 3 en revisión)_
 
 ## Fase actual
-**Fase 2 — Viabilidad: OK (CEO, 2026-11-03).** Resultado en `docs/VIABILIDAD.md`.
-Siguiente: Fase 3 — Esqueleto andante con Tecnoempleo, en una sesión nueva.
+**Fase 3 — Esqueleto andante: construida, pendiente de puerta del CEO.**
+Tecnoempleo (Catalunya) -> Neon dev -> recuento diario. Falta: comprobación manual del CEO y OK al cron de prod.
 
 | Fase | Estado |
 |------|--------|
 | 0. Arranque | OK (CEO) |
 | 1. Fundación | OK (CEO) |
 | 2. Viabilidad | OK (CEO) |
-| 3. Esqueleto andante | Siguiente |
+| 3. Esqueleto andante | En revisión (PR) |
 | 4–9 | Sin empezar |
 
 ## Qué hay
@@ -23,6 +23,21 @@ Siguiente: Fase 3 — Esqueleto andante con Tecnoempleo, en una sesión nueva.
 - `scripts/sonda_portales.py` + `.github/workflows/sonda.yml` (solo `workflow_dispatch`):
   sonda de viabilidad; tests en `tests/test_sonda.py` (sin red).
 - `pyproject.toml`: config de pytest; los tests `@pytest.mark.live` no corren por defecto.
+- Fase 3:
+  - `jobhunting/modelo.py` (contrato `Oferta`, UTC, dedup), `bloqueo.py`, `descarga.py` (robots.txt,
+    Crawl-delay, sin reintentos, para ante 403/429/captcha y redirecciones a otro host).
+  - `jobhunting/portales/tecnoempleo/{parser,scraper}.py`: listado Catalunya
+    `?pr=,240,252,262,276,` (Barcelona, Girona, Lleida, Tarragona), 30 por página, pausa 5 s, tope 30 páginas.
+  - `jobhunting/db.py` + `migraciones/001_inicial.sql`: `ofertas` (upsert por portal+id),
+    `recuento_diario` (recalculado en SQL, idempotente), `ejecuciones` (para el latido), `schema_migraciones`.
+  - `jobhunting/pipeline.py` (`python -m jobhunting.pipeline [--dry-run]`, env `DATABASE_URL`;
+    salida 0 ok / 2 bloqueado / 1 error). Un bloqueo a medias guarda ofertas pero no recuento.
+  - Workflows: `pipeline` (manual: dev o dry-run; push en `claude/**` que cambie el workflow = ejecución
+    en Neon dev), `fixture` (captura HTML para tests), `tests` con Postgres 16 de servicio.
+  - Migración 002 (CEO): `ciudad` y `modalidad` (presencial/hibrido/remoto) separadas para todas las
+    ciudades; `huella` = empresa+título+ciudad normalizados. Repetidas NO se fusionan (pueden ser varias
+    vacantes): vista `v_grupos_ofertas`; mercado en `v_mercado_ciudad_modalidad`; `recuento_diario.n_unicas`.
+  - Tests: 150 (24 de BD se saltan sin `TEST_DATABASE_URL`) + 1 live.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
@@ -40,11 +55,20 @@ Siguiente: Fase 3 — Esqueleto andante con Tecnoempleo, en una sesión nueva.
   proxies (reglas 7 y 8). Propuesta: Fase 3 con Tecnoempleo; APIs oficiales de InfoJobs/Jooble
   como fuentes de la Fase 4, si el CEO las aprueba.
 
+- 2026-11-03 (Fase 3): `?provincia=9` de la sonda NO filtraba (era toda España); el filtro real es `pr=`.
+  Catalunya ≈ 640 ofertas incluyendo remotas. Los secretos se llaman `NEO_URL_DEV` / `NEO_URL_PROD`
+  (sin la N); el código usa esos nombres. Commit explícito: `db.conectar` abre en autocommit.
+- Test local en la nube: Postgres 16 del contenedor (`/usr/lib/postgresql/16/bin`), usar `python3 -m pytest`.
+
 ## Pendientes
 - Hecho (CEO, 2026-11-03): Neon free, proyecto `jobhunting` en Frankfurt (Postgres 18), ramas
   `production` y `dev` (sin auto-borrado), secretos `NEON_URL_PROD` y `NEON_URL_DEV` en GitHub.
   La contraseña se rotó tras pegarse en un chat. Nunca pegar cadenas de conexión en el chat ni en el repo.
-- Fase 3: añadir `.env*` al `.gitignore` antes de usar la CLI de Neon (escribe `.env.local`).
+- Hecho: `.env*` en `.gitignore`.
+- Hecho (Fase 3): 14 tarjetas descartadas (ids `rf-` alfanuméricos) y 18 sin ubicación (texto sin `<b>`)
+  corregidos; fixture `tarjetas_raras.html`. Pipeline en dev: 632/633 ofertas, 0 descartadas.
+  Diagnóstico reutilizable: `scripts/diagnostico_tecnoempleo.py` (workflow `fixture` en push).
+- CEO: OK al cron diario contra Neon prod (`NEO_URL_PROD`) para cerrar la Fase 3.
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
 - CEO: decidir si se piden claves de las APIs de InfoJobs y Jooble (gratis, nuevo servicio + secreto).

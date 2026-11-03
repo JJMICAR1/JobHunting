@@ -1,0 +1,42 @@
+name: fixture
+
+# Captura una página pública de Tecnoempleo para los tests del parser.
+# Solo a mano, o al cambiar este workflow en una rama claude/. Sin cron, sin secretos.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URLs de Tecnoempleo (hasta 3, separadas por espacios)"
+        required: false
+        default: "https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276, https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276,&pagina=2"
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/fixture.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  captura:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Diagnóstico de tarjetas raras (solo en push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          pip install -q -r requirements.txt
+          python scripts/diagnostico_tecnoempleo.py
+      - if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: python scripts/captura_fixture.py "${URL}"
+        env:
+          URL: ${{ inputs.url || 'https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276, https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276,&pagina=2' }}
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: fixture
+          path: fixture_*.html
+          if-no-files-found: warn
