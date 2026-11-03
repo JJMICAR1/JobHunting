@@ -9,7 +9,7 @@ on:
         type: choice
         options: [dev, dry-run]
         default: dev
-  # En ramas claude/: ejecucion real contra Neon dev (secreto NEO_URL_DEV). Solo si cambia este archivo (rev. 2).
+  # En ramas claude/: ejecucion real contra Neon dev (secreto NEO_URL_DEV). Solo si cambia este archivo (rev. 3).
   push:
     branches: ["claude/**"]
     paths: [".github/workflows/pipeline.yml"]

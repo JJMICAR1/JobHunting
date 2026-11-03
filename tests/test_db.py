@@ -26,11 +26,11 @@ def esquema(conn):
 
 def test_migrar_dos_veces(conn):
     nuevas = db.migrar(conn)
-    assert nuevas == ["001_inicial"]
+    assert nuevas == ["001_inicial", "002_ciudad_modalidad_huella"]
     e1 = esquema(conn)
     assert db.migrar(conn) == []
     assert esquema(conn) == e1
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 2
     tablas = {r[0] for r in e1}
     assert {"ofertas", "recuento_diario", "ejecuciones", "schema_migraciones"} <= tablas
 
@@ -99,10 +99,10 @@ def test_registrar_recuento_idempotente(conn):
     db.migrar(conn)
     db.guardar_ofertas(conn, [of(i) for i in range(4)], T1)
     dia = date(2026, 11, 3)
-    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4)
+    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4, 4)
     db.guardar_ofertas(conn, [of(i) for i in range(4)], T2)
-    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4)
-    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4)
+    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4, 4)
+    assert db.registrar_recuento(conn, dia, "tecnoempleo") == (4, 4, 4)
     assert conn.execute("SELECT count(*) FROM recuento_diario").fetchone()[0] == 1
 
 
@@ -110,7 +110,7 @@ def test_recuento_dia_siguiente(conn):
     db.migrar(conn)
     db.guardar_ofertas(conn, [of(1), of(2)], T1)
     db.guardar_ofertas(conn, [of(2), of(3)], T1 + timedelta(days=1))
-    assert db.registrar_recuento(conn, date(2026, 11, 4), "tecnoempleo") == (2, 1)
+    assert db.registrar_recuento(conn, date(2026, 11, 4), "tecnoempleo") == (2, 1, 2)
 
 
 def test_recuento_dia_datetime_rechazado(conn):

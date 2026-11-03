@@ -66,13 +66,13 @@ def test_idempotencia_dos_ejecuciones(conn, db_url, fetch_ok, capsys):
     assert run(fetch_ok(), db_url) == 0
     e1 = estado(conn)
     assert len(e1["ofertas"]) == 60
-    assert e1["recuento"][0][2:] == (60, 60)
+    assert e1["recuento"][0][2:4] == (60, 60) and 0 < e1["recuento"][0][4] <= 60
     assert run(fetch_ok(), db_url,
                ahora=reloj(utc(2026, 11, 3, 20), utc(2026, 11, 3, 20, 1), utc(2026, 11, 3, 20, 2))) == 0
     assert estado(conn) == e1  # mismo estado, sin duplicados
     ejec = conn.execute("SELECT estado, n_ofertas FROM ejecuciones").fetchall()
     assert ejec == [("ok", 60), ("ok", 60)]
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 2
     out = capsys.readouterr()
     assert db_url not in out.out + out.err
 
