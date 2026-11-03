@@ -1,11 +1,8 @@
 name: sonda
 
+# Solo a mano (pestaña Actions > sonda > Run workflow). Sin cron: no toca portales sola.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - scripts/sonda_portales.py
-      - .github/workflows/sonda.yml
 
 permissions:
   contents: read

@@ -114,3 +114,61 @@ def test_sondear_robots_no_leido_no_pide_busqueda(monkeypatch):
     reg = sonda.sondear({"portal": "P", "url": URL})
     assert reg["estado"] == "error"
     assert "robots_no_leido" in reg["senales"]
+
+
+# --- marcas de bloqueo solo cuentan en paginas pequenas o "Just a moment" ---
+
+def _grande(extra):
+    """HTML mayor que MAX_BYTES_BLOQUEO con `extra` dentro."""
+    relleno = "x" * (sonda.MAX_BYTES_BLOQUEO + 10)
+    return f"<html>{extra} {relleno}</html>"
+
+
+def test_pagina_grande_con_challenge_platform_funciona_y_senal_ignorada():
+    html = _grande("oferta /cdn-cgi/challenge-platform/scripts")
+    assert len(html) > sonda.MAX_BYTES_BLOQUEO
+    estado, senales = sonda.clasificar(200, URL, html)
+    assert estado == "funciona"
+    assert "ignorada:challenge-platform" in senales
+    assert "challenge-platform" not in senales
+
+
+def test_pagina_grande_con_just_a_moment_es_bloqueada():
+    estado, senales = sonda.clasificar(200, URL, _grande("Just a moment... challenge-platform"))
+    assert estado == "bloqueado"
+    assert "challenge-platform" in senales
+
+
+def test_403_grande_sigue_bloqueado():
+    estado, senales = sonda.clasificar(403, URL, _grande("oferta challenge-platform"))
+    assert estado == "bloqueado"
+    assert "http_403" in senales
+
+
+# --- resumen_html ---
+
+def test_resumen_html_con_titulo_y_recuentos():
+    r = sonda.resumen_html("<html><head><title> Ofertas  de\n empleo </title></head>"
+                           "oferta Oferta empleo Just a moment</html>")
+    assert r["titulo"] == "Ofertas de empleo"
+    assert r["n_oferta"] == 3
+    assert r["n_empleo"] == 2
+    assert r["n_just_a_moment"] == 1
+
+
+def test_resumen_html_sin_titulo():
+    r = sonda.resumen_html("<html>oferta</html>")
+    assert r["titulo"] == ""
+    assert r["n_oferta"] == 1
+
+
+def test_resumen_html_none():
+    assert sonda.resumen_html(None) == {"titulo": "", "n_oferta": 0, "n_empleo": 0,
+                                        "n_just_a_moment": 0}
+
+
+def test_resumen_html_titulo_con_barra_vertical_y_largo():
+    r = sonda.resumen_html("<title>A | B</title>")
+    assert "|" not in r["titulo"] and r["titulo"] == "A / B"
+    largo = sonda.resumen_html("<title>" + "y" * 200 + "</title>")["titulo"]
+    assert len(largo) <= 80

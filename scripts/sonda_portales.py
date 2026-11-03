@@ -36,6 +36,9 @@ PORTALES = [
 MARCAS_BLOQUEO = ["captcha", "cf-chl", "challenge-platform", "datadome",
                   "px-captcha", "access denied", "perimeterx"]
 STATUS_BLOQUEO = {403, 429, 451, 503}
+# Cloudflare inyecta /cdn-cgi/challenge-platform/ también en páginas normales: las marcas
+# del HTML solo cuentan si la página es pequeña o es el aviso "Just a moment".
+MAX_BYTES_BLOQUEO = 50_000
 MARCAS_LOGIN = ["login", "signin", "authwall"]
 
 
@@ -49,9 +52,10 @@ def clasificar(status, url_final, html, esperadas=None):
     url_baja = (url_final or "").lower()
     if status in STATUS_BLOQUEO:
         senales.append(f"http_{status}")
+    pagina_de_aviso = len(bajo) < MAX_BYTES_BLOQUEO or "just a moment" in bajo
     for m in MARCAS_BLOQUEO:
         if m in bajo:
-            senales.append(m)
+            senales.append(m if pagina_de_aviso else f"ignorada:{m}")
     if status in STATUS_BLOQUEO or any(m in MARCAS_BLOQUEO for m in senales):
         return "bloqueado", senales
     for m in MARCAS_LOGIN:
