@@ -41,3 +41,12 @@ Un GET por URL tras robots.txt, sin login, cookies ni reintentos, pausa de 5 s.
 
 Antes de construir cada portal HTML hay que leer su aviso legal. La sonda solo comprueba
 robots.txt.
+
+## 4. Avisos legales de los portales HTML (sonda `legales`, 2026-11-03)
+
+| Portal | Qué dice | Veredicto |
+|---|---|---|
+| Talent.com | Prohíbe expresamente «cualquier scraping automatizado o no automatizado» y el uso de «robots web» o «arañas web» | **Descartado** |
+| Ticjob | «Se prohíbe copiar, descargar, distribuir… por completo o en parte, esta website» | **Descartado** (interpretación prudente) |
+| Jobfluent | Solo la cláusula habitual de propiedad intelectual (no se ceden derechos de explotación). No prohíbe expresamente el acceso automatizado | **Zona gris.** Lo decide el CEO |
+| Infoempleo | El texto legal no se pudo extraer (páginas de 100 a 260 KB con 0 caracteres de texto: se cargan con JS o con un iframe) | **Sin datos.** Hay que leerlo a mano |

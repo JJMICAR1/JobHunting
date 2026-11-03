@@ -102,7 +102,24 @@ CONDICIONES = [
     {"nombre": "Adzuna API terms", "url": "https://developer.adzuna.com/docs/terms_of_service"},
 ]
 
-GRUPOS = {"fase2": PORTALES, "fase4": PORTALES_FASE4, "condiciones": CONDICIONES}
+# Portales cuya portada se rastrea buscando su aviso legal / condiciones de uso.
+LEGALES = [
+    {"nombre": "Infoempleo", "url": "https://www.infoempleo.com/"},
+    {"nombre": "Ticjob", "url": "https://www.ticjob.es/"},
+    {"nombre": "Jobfluent", "url": "https://www.jobfluent.com/"},
+    {"nombre": "Talent.com", "url": "https://es.talent.com/"},
+]
+CLAVES_ENLACE_LEGAL = ["aviso legal", "avis legal", "legal", "condiciones", "términos",
+                       "terminos", "terms", "condiciones de uso", "condiciones generales"]
+CLAVES_COINCIDENCIA = ["scrap", "robot", "extracción", "extraer", "extract", "automatizad",
+                       "automated", "automátic", "rastre", "crawl", "araña", "spider", "bot ",
+                       "reutiliza", "reproduc", "minería de datos", "data mining", "harvest"]
+MAX_TEXTO_BUSQUEDA = 2_000_000  # las claves se buscan en todo el texto; solo se imprimen 15000
+MAX_ENLACES_LEGALES = 2
+ANCHO_CONTEXTO = 300
+
+GRUPOS = {"fase2": PORTALES, "fase4": PORTALES_FASE4, "condiciones": CONDICIONES,
+          "legales": LEGALES}
 
 from jobhunting.bloqueo import (  # noqa: E402
     ESPERADAS_GENERICAS, MARCAS_BLOQUEO, MARCAS_LOGIN, MAX_BYTES_BLOQUEO, STATUS_BLOQUEO,
@@ -482,6 +499,163 @@ def condicion(cfg):
     return cab + texto_plano(html) + "\n"
 
 
+def sanea_linea(s):
+    """Líneas seguras para el log de Actions: prefijo '| ' y sin '::'."""
+    return "\n".join("| " + l.replace("::", ": :") for l in str(s).split("\n"))
+
+
+_SEGUNDO_NIVEL = {"co", "com", "org", "net", "gov", "edu", "ac"}
+
+
+def dominio_registrable(host):
+    """Dominio registrable aproximado (sin lista PSL): a.b.example.com -> example.com."""
+    h = (host or "").lower().split(":")[0].strip(".")
+    partes = h.split(".")
+    if len(partes) <= 2:
+        return h
+    n = 3 if len(partes[-1]) == 2 and partes[-2] in _SEGUNDO_NIVEL else 2
+    return ".".join(partes[-n:])
+
+
+class _Enlaces(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.enlaces, self._href, self._texto = [], None, []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._cerrar()
+            self._href, self._texto = dict(attrs).get("href"), []
+
+    def handle_endtag(self, tag):
+        if tag == "a":
+            self._cerrar()
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._texto.append(data)
+
+    def _cerrar(self):
+        if self._href is not None:
+            self.enlaces.append((self._href, " ".join(" ".join(self._texto).split())))
+        self._href = None
+
+
+def enlaces_legales(html, base, dominio, claves=None, maximo=MAX_ENLACES_LEGALES):
+    """URLs distintas (en orden) del MISMO dominio registrable cuyo texto o href contiene
+    alguna clave legal. Función pura: no hace red."""
+    claves = [c.lower() for c in (claves or CLAVES_ENLACE_LEGAL)]
+    dominio = (dominio or "").lower()
+    p = _Enlaces()
+    try:
+        p.feed(html or "")
+        p.close()
+    except Exception:
+        pass
+    p._cerrar()
+    vistos, res = set(), []
+    for href, texto in p.enlaces:
+        href = (href or "").strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        url = urljoin(base, href).split("#")[0]
+        u = urlparse(url)
+        if u.scheme not in ("http", "https") or dominio_registrable(u.hostname) != dominio:
+            continue
+        if not any(c in texto.lower() or c in href.lower() for c in claves):
+            continue
+        if url not in vistos:
+            vistos.add(url)
+            res.append(url)
+            if len(res) >= maximo:
+                break
+    return res
+
+
+def coincidencias(texto, claves, ancho=ANCHO_CONTEXTO):
+    """Lista de (clave, fragmento) por cada aparición de una clave (sin distinguir
+    mayúsculas), con ~`ancho` caracteres de contexto en total. Función pura."""
+    texto = texto or ""
+    bajo = texto.lower()
+    res = []
+    for c in claves:
+        c_l = c.lower()
+        i = bajo.find(c_l)
+        while i != -1:
+            mitad = max(0, (ancho - len(c_l)) // 2)
+            res.append((c, texto[max(0, i - mitad):i + len(c_l) + mitad]))
+            i = bajo.find(c_l, i + len(c_l))
+    return res
+
+
+def _descargar_html(url):
+    """robots -> pausa -> GET. Devuelve (status, html, motivo); motivo None si fue bien."""
+    ok = robots_permitido(url)
+    if ok is not True:
+        return None, "", "prohibido_robots" if ok is False else "robots_no_leido"
+    time.sleep(PAUSA_ROBOTS_S)
+    status, html = None, ""
+    red = RedirectSeguro(robots=robots_permitido)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        resp, red = _abrir(req, red)
+        with resp as r:
+            status = r.status
+            html = r.read(MAX_LECTURA_CONDICIONES).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        status = e.code
+    except Exception as e:
+        return None, "", f"excepcion:{type(e).__name__}"
+    if red.bloqueo:
+        return status, "", red.bloqueo
+    if status is not None and status >= 400:
+        return status, "", f"HTTP {status}"
+    return status, html, None
+
+
+def main_legales():
+    bloqueados, primera = set(), True
+
+    def salida(s):
+        print(sanea_linea(s), flush=True)
+
+    def bajar(url):
+        nonlocal primera
+        if host_de(url) in bloqueados:
+            return None, "", "omitido_host_bloqueado"
+        if not primera:
+            time.sleep(PAUSA_S)
+        primera = False
+        try:
+            st, html, motivo = _descargar_html(url)
+        except Exception as e:
+            return None, "", f"excepcion:{type(e).__name__}"
+        if st in (403, 429):
+            bloqueados.add(host_de(url))
+        return st, html, motivo
+
+    for cfg in LEGALES:
+        nombre, url = cfg["nombre"], cfg["url"]
+        salida(f"===== {nombre} {url} =====")
+        st, html, motivo = bajar(url)
+        if motivo:
+            salida(f"portada no disponible: {motivo}")
+            continue
+        dominio = dominio_registrable(host_de(url))
+        enlaces = enlaces_legales(html, url, dominio)
+        salida(f"enlaces legales: {enlaces or 'ninguno'}")
+        for e in enlaces:
+            st, html, motivo = bajar(e)
+            salida(f"--- {e} ({motivo or st}) ---")
+            if motivo:
+                continue
+            completo = texto_plano(html, MAX_TEXTO_BUSQUEDA)
+            salida(f"bytes_html={len(html or '')} chars_texto={len(completo)}")
+            salida(completo[:MAX_TEXTO_CONDICIONES])
+            for clave, frag in coincidencias(completo, CLAVES_COINCIDENCIA, ANCHO_CONTEXTO):
+                salida(f"[{clave}] ...{frag}...")
+
+
 def main_condiciones():
     bloques = []
     bloqueados = set()
@@ -514,6 +688,12 @@ def main(argv=None):
         if e.code not in (0, None):  # error de uso: visible como anotación en Actions
             print("::error::sonda_portales: argumentos inválidos (ver stderr)", file=sys.stderr)
         raise
+    if args.grupo == "legales":
+        try:
+            main_legales()
+        except Exception as e:
+            print(sanea_linea(f"legales: excepcion:{type(e).__name__}"), flush=True)
+        return 0
     if args.grupo == "condiciones":
         main_condiciones()
         return 0

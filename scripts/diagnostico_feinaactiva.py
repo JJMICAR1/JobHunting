@@ -24,12 +24,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sonda_portales  # noqa: E402
 from sonda_portales import USER_AGENT, RedirectSeguro, texto_plano  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from jobhunting.xml_seguro import LectorSeguro, XmlRechazado  # noqa: E402,F401
+
 URL_XML = "https://feinaactiva.gencat.cat/api/offers/offers-xml"
 URL_LICENCIAS = "https://administraciodigital.gencat.cat/ca/dades/dades-obertes/informacio-practica/llicencies/"
 URL_PORTAL = "https://feinaactiva.gencat.cat/"
 
-TOPE_BYTES = 200 * 1024 * 1024      # tope de bytes (en red y descomprimidos)
-TOPE_SEGUNDOS = 300                 # tope de tiempo de lectura del XML
+from jobhunting.xml_seguro import TOPE_BYTES, TOPE_SEGUNDOS  # noqa: E402  (en red y descomprimidos)
 TIMEOUT = 60
 MAX_LECTURA_ROBOTS = 500 * 1024
 MAX_LECTURA_HTML = 2 * 1024 * 1024
@@ -46,7 +48,6 @@ PERSONAL_EXACTO = {"dni", "nif"}
 PERSONAL_PREFIJO = ("email", "mail", "telefon", "phone", "contact", "persona", "nom", "cognom",
                     "nombre", "apellido", "adreca", "adreça", "direccion", "address",
                     "responsable", "cif", "mobil", "movil", "fax", "web", "url")
-_RE_DTD = re.compile(rb"<!\s*(DOCTYPE|ENTITY)", re.I)
 _RE_6DIG = re.compile(r"\d{6}")
 _RE_LEGAL = re.compile(r"av[ií]s\s+legal|aviso\s+legal|condicions\s+d.\s*[uú]s|"
                        r"condiciones\s+de\s+uso|legal", re.I)
@@ -187,29 +188,38 @@ def resumen_estructura(eventos):
                         if r.n > 1 and 1 <= p.count("/") <= MAX_NIVEL))
     oferta = repetidas[0][2] if repetidas else None
     res = {"raiz": raiz, "ruta_oferta": oferta, "n_ofertas": rutas[oferta].n if oferta else 0,
-           "candidatos": [(p, -n) for d, n, p in repetidas[:5] if d == repetidas[0][0]], "campos": [],
+           "candidatos": [(p, -n) for d, n, p in repetidas[:5] if d == repetidas[0][0]],
+           "campos": [], "otros": {},
            "n_rutas": len(rutas), "rutas_truncadas": truncado}
     if not oferta:
         return res
-    N, nivel = rutas[oferta].n, oferta.count("/")
-    for p, r in sorted(rutas.items()):
-        if p.startswith(oferta + "/"):
-            rel = p[len(oferta) + 1:]
-        elif p.startswith(oferta + "@"):
-            rel = p[len(oferta):]
-        else:
-            continue
-        con_valor = r.niv.get(nivel, [0, 0])[1]
-        campo = {"ruta": rel, "apariciones": r.n, "no_vacias": r.nv,
-                 "pct_no_vacio": round(100.0 * con_valor / N, 1),
-                 "len_media": round(r.suma / r.nv, 1) if r.nv else 0, "len_max": r.mx,
-                 "distintos": len(r.hashes), "distintos_tope": r.saturado,
-                 "formas": list(r.formas), "personal": parece_personal(rel),
-                 "categorico": None}
-        if (r.valores is not None and not campo["personal"] and not r.saturado
-                and es_categorico_seguro(r.valores, r.nv)):
-            campo["categorico"] = r.valores.most_common()
-        res["campos"].append(campo)
+    def campos_de(oferta):
+        N, nivel = rutas[oferta].n, oferta.count("/")
+        campos = []
+        for p, r in sorted(rutas.items()):
+            if p.startswith(oferta + "/"):
+                rel = p[len(oferta) + 1:]
+            elif p.startswith(oferta + "@"):
+                rel = p[len(oferta):]
+            else:
+                continue
+            con_valor = r.niv.get(nivel, [0, 0])[1]
+            campo = {"ruta": rel, "apariciones": r.n, "no_vacias": r.nv,
+                     "pct_no_vacio": round(100.0 * con_valor / N, 1),
+                     "len_media": round(r.suma / r.nv, 1) if r.nv else 0, "len_max": r.mx,
+                     "distintos": len(r.hashes), "distintos_tope": r.saturado,
+                     "formas": list(r.formas), "personal": parece_personal(rel),
+                     "categorico": None}
+            if (r.valores is not None and not campo["personal"] and not r.saturado
+                    and es_categorico_seguro(r.valores, r.nv)):
+                campo["categorico"] = r.valores.most_common()
+            campos.append(campo)
+        return campos
+
+    res["campos"] = campos_de(oferta)
+    for ruta_c, _ in res["candidatos"]:   # el resto de candidatos (p. ej. sicas/ad)
+        if ruta_c != oferta:
+            res["otros"][ruta_c] = campos_de(ruta_c)
     return res
 
 
@@ -223,19 +233,21 @@ def formatear_estructura(res):
     if not res["ruta_oferta"]:
         L.append("No se detecta un elemento oferta repetido.")
         return L
-    L.append("")
-    L.append("ruta | apar | %ofertas_no_vacio | len_media | len_max | distintos | formas")
-    for c in res["campos"]:
-        d = f"{c['distintos']}{'+' if c['distintos_tope'] else ''}"
-        L.append(f"{c['ruta']} | {c['apariciones']} | {c['pct_no_vacio']} | {c['len_media']} "
-                 f"| {c['len_max']} | {d} | " + " ; ".join(c["formas"]))
-    cats = [c for c in res["campos"] if c["categorico"]]
+    todos = [(res["ruta_oferta"], res["campos"])] + list(res.get("otros", {}).items())
+    for ruta_c, campos in todos:
+        L += ["", f"== Campos de {ruta_c} ==",
+              "ruta | apar | %ofertas_no_vacio | len_media | len_max | distintos | formas"]
+        for c in campos:
+            d = f"{c['distintos']}{'+' if c['distintos_tope'] else ''}"
+            L.append(f"{c['ruta']} | {c['apariciones']} | {c['pct_no_vacio']} | {c['len_media']} "
+                     f"| {c['len_max']} | {d} | " + " ; ".join(c["formas"]))
+    cats = [(r, c) for r, cs in todos for c in cs if c["categorico"]]
     L += ["", "== Recuento por valor (<=60 distintos, solo categoricos claros) =="]
-    for c in cats:
-        L.append(f"{c['ruta']}: " + ", ".join(f"{v[:60]}={n}" for v, n in c["categorico"]))
+    for r, c in cats:
+        L.append(f"{r}:{c['ruta']}: " + ", ".join(f"{v[:60]}={n}" for v, n in c["categorico"]))
     L += ["", "== Rutas que sugieren datos personales (decidir que NO guardar) =="]
-    pers = [c for c in res["campos"] if c["personal"]]
-    L += [f"{c['ruta']}: {c['pct_no_vacio']}% no vacio" for c in pers] or ["(ninguna)"]
+    pers = [(r, c) for r, cs in todos for c in cs if c["personal"]]
+    L += [f"{c['ruta']}: {c['pct_no_vacio']}% no vacio" for r, c in pers] or ["(ninguna)"]
     return L
 
 
@@ -334,34 +346,6 @@ def cargar_robots(url):
 def robots_permitido(url):
     """True / False / None (no concluyente)."""
     return sonda_portales.robots_permitido(url)
-
-
-class XmlRechazado(Exception):
-    pass
-
-
-class LectorSeguro:
-    """Fichero de solo lectura: rechaza DTD/ENTITY, UTF-16, exceso de bytes y de tiempo."""
-
-    def __init__(self, fuente, tope=TOPE_BYTES, segundos=TOPE_SEGUNDOS):
-        self.f, self.tope, self.total, self.cola = fuente, tope, 0, b""
-        self.limite = time.monotonic() + segundos
-
-    def read(self, n=65536):
-        chunk = self.f.read(n)
-        if not chunk:
-            return chunk
-        if self.total == 0 and b"\x00" in chunk[:4096]:
-            raise XmlRechazado("codificacion no soportada (nulos en los primeros 4 KB)")
-        self.total += len(chunk)
-        if self.total > self.tope:
-            raise XmlRechazado("supera el tope de bytes")
-        if time.monotonic() > self.limite:
-            raise XmlRechazado("supera el tope de tiempo")
-        if _RE_DTD.search(self.cola + chunk):
-            raise XmlRechazado("DOCTYPE/ENTITY rechazado")
-        self.cola = (self.cola + chunk)[-16:]
-        return chunk
 
 
 class _Contador:

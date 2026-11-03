@@ -1,6 +1,6 @@
-"""Pipeline diario: recorre Tecnoempleo y guarda en Postgres.
+"""Pipeline diario: recorre los portales (Tecnoempleo, Feina Activa) y guarda en Postgres.
 
-Uso: python -m jobhunting.pipeline [--dry-run]   (DATABASE_URL por entorno; nunca se imprime)
+Uso: python -m jobhunting.pipeline [--dry-run] [--portal tecnoempleo|feinaactiva|todos]   (DATABASE_URL por entorno; nunca se imprime)
 Salida: 0 ok; 2 bloqueado; 1 error / parser roto.
 """
 from __future__ import annotations
@@ -12,18 +12,22 @@ import sys
 from datetime import datetime, timezone
 
 from jobhunting import db
-from jobhunting.descarga import descargar
-from jobhunting.portales.tecnoempleo.parser import PORTAL, ParserRoto
+from jobhunting.descarga import descargar, descargar_bytes
+from jobhunting.modelo import ParserRoto
+from jobhunting.portales.feinaactiva import scraper as scraper_feinaactiva
 from jobhunting.portales.tecnoempleo.scraper import recorrer
+
+PORTALES = ("tecnoempleo", "feinaactiva")
+NOMBRES = {"tecnoempleo": "Tecnoempleo", "feinaactiva": "Feina Activa"}
 
 
 def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _resumen(estado, rec, n_nuevas, n_vistas, extra=None, n_unicas=None) -> str:
+def _resumen(estado, rec, n_nuevas, n_vistas, extra=None, n_unicas=None, portal="tecnoempleo") -> str:
     n = len(rec.ofertas) if rec else 0
-    lineas = [f"## Tecnoempleo: {estado}",
+    lineas = [f"## {NOMBRES.get(portal, portal)}: {estado}",
               f"- paginas: {rec.paginas if rec else 0}",
               f"- n_ofertas: {n}",
               f"- n_nuevas: {n_nuevas if n_nuevas is not None else '-'}",
@@ -36,14 +40,28 @@ def _resumen(estado, rec, n_nuevas, n_vistas, extra=None, n_unicas=None) -> str:
     if rec and rec.total_anunciado and abs(n - rec.total_anunciado) > 0.10 * rec.total_anunciado:
         lineas.append(f"- AVISO: n_ofertas ({n}) difiere >10% del total anunciado "
                       f"({rec.total_anunciado})")
+    if rec is not None and getattr(rec, "n_por_grupo", None):
+        lineas.append("- por_grupo: " + ", ".join(f"{k}={v}" for k, v in sorted(rec.n_por_grupo.items())))
+    if rec is not None and getattr(rec, "n_duplicadas", 0):
+        lineas.append(f"- n_duplicadas: {rec.n_duplicadas}")
     if extra:
         lineas.append(f"- detalle: {extra}")
     return "\n".join(lineas) + "\n"
 
 
-def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, pausa_s=5,
-             sleep=None, ahora=_ahora) -> int:
-    kw = {"sleep": sleep} if sleep else {}
+def ejecutar_portal(portal="tecnoempleo", fetch=None, dry_run=False, database_url=None,
+                    max_paginas=30, pausa_s=5, sleep=None, ahora=_ahora) -> int:
+    """Una ejecución completa e independiente de un portal (su registrar_ejecucion y su recuento)."""
+    if portal not in PORTALES:
+        print(f"Portal desconocido: {portal}", file=sys.stderr)
+        return 1
+    if portal == "feinaactiva":
+        fetch = fetch or descargar_bytes
+        llamada = lambda: scraper_feinaactiva.recorrer(fetch=fetch)  # noqa: E731
+    else:
+        fetch = fetch or descargar
+        kw = {"sleep": sleep} if sleep else {}
+        llamada = lambda: recorrer(fetch=fetch, max_paginas=max_paginas, pausa_s=pausa_s, **kw)  # noqa: E731
     inicio = ahora()
     conn = None
     if not dry_run:
@@ -60,7 +78,7 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
     rec, estado, codigo, detalle, n_nuevas, n_vistas = None, "ok", 0, None, None, None
     n_unicas = None
     try:
-        rec = recorrer(fetch=fetch, max_paginas=max_paginas, pausa_s=pausa_s, **kw)
+        rec = llamada()
         if rec.bloqueado:
             estado, codigo, detalle = "bloqueado", 2, rec.detalle
         if rec.ofertas and conn is not None:
@@ -69,7 +87,7 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
             n_vistas, n_nuevas = db.guardar_ofertas(conn, ofertas, capt)
             # Un recorrido bloqueado a medias guarda ofertas pero no el recuento del dia.
             if not rec.bloqueado:
-                _, _, n_unicas = db.registrar_recuento(conn, capt.date(), PORTAL)
+                _, _, n_unicas = db.registrar_recuento(conn, capt.date(), portal)
     except ParserRoto as e:
         conn and conn.rollback()
         estado, codigo, detalle = "error", 1, f"parser roto: {e}"
@@ -78,14 +96,14 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
         estado, codigo, detalle = "error", 1, f"{type(e).__name__}"
     if conn is not None:
         try:
-            db.registrar_ejecucion(conn, PORTAL, inicio, ahora(), estado,
+            db.registrar_ejecucion(conn, portal, inicio, ahora(), estado,
                                    len(rec.ofertas) if rec else 0, detalle)
             conn.commit()
         except Exception as e:
             print(f"No se pudo registrar la ejecucion: {type(e).__name__}", file=sys.stderr)
             codigo = codigo or 1
         conn.close()
-    texto = _resumen(estado, rec, n_nuevas, n_vistas, detalle, n_unicas)
+    texto = _resumen(estado, rec, n_nuevas, n_vistas, detalle, n_unicas, portal)
     print(texto)
     ruta = os.environ.get("GITHUB_STEP_SUMMARY")
     if ruta:
@@ -94,11 +112,34 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
     return codigo
 
 
+def _peor(codigos) -> int:
+    """El peor código de salida: 1 (error) > 2 (bloqueado) > 0."""
+    codigos = list(codigos)
+    return 1 if 1 in codigos else 2 if 2 in codigos else 0
+
+
+def ejecutar(portal="tecnoempleo", **kw) -> int:
+    """Compatible con la API anterior (por defecto Tecnoempleo). portal="todos" ejecuta cada portal
+    por separado; un fallo de uno no impide el otro. Con "todos", `fetch` no se admite."""
+    if portal == "todos":
+        kw.pop("fetch", None)
+        codigos = []
+        for p in PORTALES:
+            try:
+                codigos.append(ejecutar_portal(p, **kw))
+            except Exception as e:  # defensa: nunca cortar la ejecución de los demás
+                print(f"{p}: fallo inesperado {type(e).__name__}", file=sys.stderr)
+                codigos.append(1)
+        return _peor(codigos)
+    return ejecutar_portal(portal, **kw)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="jobhunting.pipeline")
     ap.add_argument("--dry-run", action="store_true", help="sin BD: solo recorre e imprime")
+    ap.add_argument("--portal", choices=[*PORTALES, "todos"], default="todos")
     a = ap.parse_args(argv)
-    return ejecutar(dry_run=a.dry_run, database_url=os.environ.get("DATABASE_URL"))
+    return ejecutar(portal=a.portal, dry_run=a.dry_run, database_url=os.environ.get("DATABASE_URL"))
 
 
 if __name__ == "__main__":

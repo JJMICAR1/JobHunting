@@ -1,11 +1,42 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 4 en curso)_
+_Última actualización: 2026-11-03 (Fase 4: Feina Activa en puerta)_
+
+## Tareas del CEO (lo que tienes que hacer tú)
+_El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
+
+1. **Puerta de Feina Activa (unos 5 min).**
+   - En la consola de Neon: proyecto `jobhunting`, rama **dev**, SQL Editor. Ejecuta:
+     ```sql
+     SELECT dia, portal, n_vistas, n_nuevas, n_unicas
+     FROM recuento_diario ORDER BY dia DESC, portal;
+     ```
+     Esperado hoy: `feinaactiva` con unas 4655 ofertas y 4570 únicas; `tecnoempleo` con unas 632.
+   - Muestra de ofertas (abre 2 o 3 URLs y comprueba que llevan a la oferta real):
+     ```sql
+     SELECT titulo, empresa, ciudad, fecha_publicacion, url
+     FROM ofertas WHERE portal = 'feinaactiva' LIMIT 20;
+     ```
+   - Si cuadra, fusiona el PR #11 y escribe al jefe **"Feina Activa OK"**. Al fusionar, el cron de prod
+     (05:17 UTC) recogerá los dos portales.
+2. Opcional: **Adzuna**. Date de alta en developer.adzuna.com (gratis) y guarda la clave como secretos de
+   GitHub. Pide antes al jefe los nombres de los secretos.
+3. **Decidir sobre Jobfluent** (portal tech de Barcelona, unas 34 ofertas). Su aviso legal no prohíbe el acceso
+   automatizado, pero dice que no se ceden derechos de explotación de los contenidos. Guardaríamos solo la ficha
+   ligera (título, empresa, url) para uso personal. ¿Sí o no?
+4. **Infoempleo:** su aviso legal no se puede leer de forma automática. Si quieres esta fuente, ábrelo tú
+   (infoempleo.com/avisolegal/) y dime si dice algo sobre robots o la extracción de datos.
+5. **Cerrar la Fase 4:** el jefe recomienda escribir **"Fase 4 OK"** con Tecnoempleo y Feina Activa. Jobfluent,
+   Greenhouse y Adzuna se pueden añadir más adelante, cada una con su puerta. Después, abrir una sesión nueva:
+   "Empezamos la Fase 5".
+6. Opcional (recomendado por el reviewer): crea en GitHub un **Environment `prod`** con el secreto
+   `NEO_URL_PROD` y limítalo a la rama `main`.
 
 ## Fase actual
 **Fase 4 — Fuentes: en curso (desde 2026-11-03).** Sonda de fuentes nuevas hecha: ver `docs/VIABILIDAD_FASE4.md`.
-Esperando al CEO para elegir la primera fuente nueva.
-OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade en el PR de la Fase 4 y se activa al fusionar.
+PR #10 fusionado: sonda Fase 4 y cron de prod, que está activo desde el 2026-11-03 (antes no existía).
+Primera fuente nueva: **Feina Activa** (XML abierto de la Generalitat). Está construida y probada en Neon dev,
+y espera su puerta: que el CEO revise y fusione el PR.
 
 | Fase | Estado |
 |------|--------|
@@ -47,6 +78,23 @@ OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade e
     se saltan las demás URLs de ese host. Un push de `sonda.yml` en `claude/**` ejecuta fase4 y luego condiciones.
   - `pipeline.yml`: `schedule` 05:17 UTC, con un paso prod (`NEO_URL_PROD`) que solo corre en schedule.
   - Tests: 218 (24 de BD se saltan) + 1 live.
+- Fase 4, fuente Feina Activa:
+  - `jobhunting/portales/feinaactiva/`: un GET diario de unos 7 MB a `feinaactiva.gencat.cat/api/offers/offers-xml`.
+    Grupos `feinaactiva` (unas 3980) y `sicas` (668, del SOC). Ficha ligera: id, título, empresa, ciudad/región,
+    fecha (medianoche de Madrid pasada a UTC), url y modalidad. NO se guardan content, requisitos ni salarios.
+  - `jobhunting/xml_seguro.py`: rechaza DOCTYPE/ENTITY y tiene topes de bytes y de tiempo.
+    `descarga.descargar_bytes`: `_Redireccion` NO sigue saltos a otro host y comprueba robots.txt antes de cada
+    salto (también para Tecnoempleo; como mucho 3 saltos).
+  - Pipeline multi-portal: `--portal tecnoempleo|feinaactiva|todos` (por defecto todos). Cada portal es
+    independiente y el código de salida es el peor. El cron ejecuta todos.
+  - Licencia: reutilización libre citando la fuente (Generalitat de Catalunya, Feina Activa) y la fecha de
+    actualización, sin desnaturalizar la información (Ley 37/2007).
+  - `scripts/diagnostico_feinaactiva.py` + workflow `diagnostico`: muestra la estructura del XML sin valores.
+  - `db.guardar_ofertas` guarda por lotes de 500 (executemany en modo pipeline). La ejecución de los dos portales
+    pasa de 10,5 min a 2 min 13 s (el timeout es de 15).
+  - Neon dev, 2026-11-03: 1.ª ejecución, Feina Activa 4655 ofertas (3987 feinaactiva + 668 sicas), 0 descartadas,
+    4570 puestos únicos. 2.ª ejecución, 1 nueva (idempotente). Tecnoempleo 632, sin cambios.
+  - Tests: 514 con BD.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
@@ -79,6 +127,8 @@ OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade e
   3. Fuentes con formatos abiertos (feeds de ofertas).
   Cada fuente nueva necesita el OK del CEO y su propia puerta.
 
+- 2026-11-03 (Fase 4, avisos legales): Talent.com prohíbe el scraping y Ticjob prohíbe descargar la web: los dos
+  quedan descartados. Jobfluent está en zona gris (lo decide el CEO). Infoempleo no se pudo leer. Ver `docs/VIABILIDAD_FASE4.md` §4.
 - 2026-11-03 (Fase 4, condiciones leídas desde Actions): la API de InfoJobs prohíbe los agregadores de ofertas,
   así que no es viable. El plan gratis de Jooble da 500 peticiones de por vida, así que tampoco. Adzuna permite
   la búsqueda personal (necesita el OK del CEO). Mejor candidata: el XML abierto de Feina Activa (Generalitat).
@@ -94,9 +144,9 @@ OJO: el cron de prod NO estaba en `main` (ESTADO.md decía que sí). Se añade e
 - CEO: OK al cron diario contra Neon prod (`NEO_URL_PROD`) para cerrar la Fase 3.
 - CEO (2026-11-03): en la Fase 4 hay que intentar que funcionen todos los portales. Si para alguno
   la única vía rompe las reglas 7 u 8, el jefe para y el CEO decide.
-- Tras fusionar el PR de la Fase 4: comprobar que el cron de prod corre (pipeline con evento schedule, 05:17 UTC)
+- Siguiente sesión: comprobar que el cron de prod corre (pipeline con evento schedule, 05:17 UTC)
   y que `recuento_diario` tiene fila del día en la rama `production`. Hasta hoy no ha corrido nunca.
-- CEO: elegir la primera fuente nueva de la Fase 4. Propuesta: el XML de Feina Activa. Luego, por puertas:
+- CEO: puerta de Feina Activa (revisar el recuento en Neon dev y fusionar el PR). Siguientes candidatas, por puertas:
   Infoempleo, Ticjob y Jobfluent (antes, leer su aviso legal), Greenhouse/Lever por empresa (hace falta una
   lista de slugs) y Adzuna (clave nueva).
 - Recomendado por el reviewer (lo decide el CEO): un GitHub Environment `prod` con `NEO_URL_PROD` limitado a `main`.

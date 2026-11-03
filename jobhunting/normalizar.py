@@ -21,7 +21,7 @@ def _clave(s: str) -> str:
 
 def _modalidad(s: str) -> str | None:
     k = _clave(s)
-    if "remot" in k or "teletrabajo" in k:
+    if "remot" in k or "teletrabajo" in k or "teletreball" in k:
         return "remoto"
     if "hibrid" in k or "semipresencial" in k:
         return "hibrido"
@@ -47,6 +47,11 @@ def _cap_palabra(p: str, primera: bool) -> str:
 
 def _capitalizar(texto: str) -> str:
     return " ".join(_cap_palabra(p, i == 0) for i, p in enumerate(texto.split()))
+
+
+def capitalizar_nombre(texto: str) -> str:
+    """'L'HOSPITALET DE LLOBREGAT' -> "L'Hospitalet de Llobregat" (conectores en minúscula)."""
+    return _capitalizar(" ".join((texto or "").split()))
 
 
 def separar_ubicacion(texto: str | None) -> tuple[str | None, str | None]:

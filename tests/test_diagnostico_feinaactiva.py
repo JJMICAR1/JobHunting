@@ -418,3 +418,41 @@ def test_robots_404_410_sin_restricciones(monkeypatch, code):
 @pytest.mark.parametrize("code", [401, 403, 429, 400, 451, 500, 503])
 def test_robots_otros_errores_no_concluyentes(monkeypatch, code):
     assert _robots_con_status(monkeypatch, code) is None
+
+
+# ---------- LectorSeguro compartido y candidatos (Feina Activa: feinaactiva/ad + sicas/ad) ----------
+XML_DOS_GRUPOS = (
+    "<ofertes>"
+    "<feinaactiva><ad><id>1</id><title>A</title></ad><ad><id>2</id><title>B</title></ad></feinaactiva>"
+    "<sicas><ad><id>3</id><title>C</title></ad><ad><id>4</id><title>D</title></ad></sicas>"
+    "</ofertes>").encode()
+
+
+def test_diagnostico_usa_el_lector_seguro_compartido():
+    from jobhunting import xml_seguro
+    assert diag.LectorSeguro is xml_seguro.LectorSeguro
+    assert diag.XmlRechazado is xml_seguro.XmlRechazado
+    assert diag.TOPE_BYTES == xml_seguro.TOPE_BYTES and diag.TOPE_SEGUNDOS == xml_seguro.TOPE_SEGUNDOS
+
+
+def test_lista_tambien_sicas_ad():
+    res = _resumen(XML_DOS_GRUPOS)
+    assert res["ruta_oferta"] == "ofertes/feinaactiva/ad"
+    rutas = [r for r, _ in res["candidatos"]]
+    assert "ofertes/feinaactiva/ad" in rutas and "ofertes/sicas/ad" in rutas
+    assert dict(res["candidatos"]) == {"ofertes/feinaactiva/ad": 2, "ofertes/sicas/ad": 2}
+    assert "ofertes/sicas/ad" in res["otros"]
+    assert {c["ruta"] for c in res["otros"]["ofertes/sicas/ad"]} >= {"id", "title"}
+    assert "ofertes/feinaactiva/ad" not in res["otros"]   # la principal va en res["campos"]
+
+
+def test_formatear_muestra_sicas_ad_sin_valores():
+    salida = "\n".join(diag.formatear_estructura(_resumen(XML_DOS_GRUPOS)))
+    assert "ofertes/sicas/ad" in salida and "ofertes/feinaactiva/ad" in salida
+
+
+def test_lector_seguro_desde_diagnostico_en_iterparse_rechaza_doctype():
+    errores = []
+    lector = diag.LectorSeguro(io.BytesIO(b'<!DOCTYPE a [<!ENTITY e "x">]><a><b/><b/></a>'))
+    list(diag.eventos_desde_iterparse(lector, errores))
+    assert errores and errores[0].startswith("XmlRechazado")

@@ -57,6 +57,8 @@ def migrar(conn: psycopg.Connection) -> list[str]:
     return nuevas
 
 
+_LOTE = 500
+
 _UPSERT = """
 INSERT INTO ofertas (portal, id_portal, titulo, url, empresa, ubicacion,
                      fecha_publicacion, primera_vez, ultima_vez, ciudad, modalidad, huella)
@@ -79,19 +81,24 @@ def guardar_ofertas(conn: psycopg.Connection, ofertas, ahora_utc: datetime) -> t
     """Upsert por (portal, id_portal). Devuelve (n_vistas, n_nuevas) de esta llamada."""
     _utc(ahora_utc, "ahora_utc")
     unicas = deduplicar(list(ofertas))
+    if not unicas:
+        return 0, 0
+    filas = [(o.portal, o.id_portal, o.titulo, o.url, o.empresa, o.ubicacion,
+              o.fecha_publicacion, ahora_utc, ahora_utc,
+              getattr(o, "ciudad", None), getattr(o, "modalidad", None),
+              getattr(o, "huella", None)) for o in unicas]
     nuevas = 0
     with conn.transaction():
         with conn.cursor() as cur:
-            for o in unicas:
-                cur.execute(
-                    _UPSERT,
-                    (o.portal, o.id_portal, o.titulo, o.url, o.empresa, o.ubicacion,
-                     o.fecha_publicacion, ahora_utc, ahora_utc,
-                     getattr(o, "ciudad", None), getattr(o, "modalidad", None),
-                     getattr(o, "huella", None)),
-                )
-                if cur.fetchone()[0]:
-                    nuevas += 1
+            # executemany con returning usa el modo pipeline de psycopg: pocas idas y vueltas
+            # a Neon (antes, una por fila: ~7 min para 4.600 ofertas desde Actions).
+            for i in range(0, len(filas), _LOTE):
+                cur.executemany(_UPSERT, filas[i:i + _LOTE], returning=True)
+                while True:
+                    if cur.fetchone()[0]:
+                        nuevas += 1
+                    if not cur.nextset():
+                        break
     return len(unicas), nuevas
 
 
