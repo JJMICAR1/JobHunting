@@ -3,14 +3,14 @@
 _Última actualización: 2026-11-03_
 
 ## Fase actual
-**Fase 1 — Fundación: hecha, pendiente de "Fase 1 OK" del CEO.**
-No se empieza la Fase 2 hasta esa puerta.
+**Fase 1 — Fundación: OK (CEO, 2026-11-03).** Siguiente: Fase 2 — Viabilidad, en una sesión nueva.
 
 | Fase | Estado |
 |------|--------|
 | 0. Arranque | OK (CEO) |
-| 1. Fundación | Entregada, esperando puerta |
-| 2–9 | Sin empezar |
+| 1. Fundación | OK (CEO) |
+| 2. Viabilidad | Siguiente |
+| 3–9 | Sin empezar |
 
 ## Qué hay
 - `.claude/agents/`: scraper-dev, tester, db-engineer, ml-engineer, devops, reviewer
@@ -27,8 +27,12 @@ No se empieza la Fase 2 hasta esa puerta.
 
 ## Decisiones
 - Tests con `pytest`; CI en GitHub Actions (gratis en repo público).
+- 2026-11-03: Actions no arrancaba porque la cuenta de GitHub estaba bloqueada por facturación.
+  El CEO lo resolvió y el workflow `tests` pasó en `main`. Si un job falla en 2-3 s sin log,
+  mirar primero las anotaciones del check (puede ser otra vez facturación).
 
 ## Pendientes
 - Antes de la Fase 3: crear Neon (rama `dev`) y los GitHub Secrets (lo hace el CEO; el jefe
   dará los pasos).
-- Puerta Fase 1: el CEO comprueba que el workflow `tests` pasa en el PR y escribe "Fase 1 OK".
+- Inicio de la Fase 2: subir `actions/checkout` y `actions/setup-python` a versiones con Node 24
+  (aviso de que Node 20 está obsoleto).
