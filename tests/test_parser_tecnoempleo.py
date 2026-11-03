@@ -148,3 +148,11 @@ def test_fixtures_p1_p2_todas_con_ubicacion(res):
     for p in (1, 2):
         sin = [o.id_portal for o in res[p].ofertas if not o.ubicacion]
         assert sin == [], f"p{p} ofertas sin ubicacion: {sin}"
+
+
+def test_regresion_selector_tarjetas_no_usa_clases_inexistentes():
+    """Issue #14: el selector de tarjetas apuntaba a una clase que no existe en el HTML real."""
+    from pathlib import Path
+    html = (Path(__file__).parent / "fixtures/tecnoempleo/listado_catalunya_p1.html").read_text(encoding="utf-8")
+    assert "bg-blanco" not in html
+    assert len(parsear_listado(html).ofertas) > 0
