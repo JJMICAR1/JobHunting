@@ -25,7 +25,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python scripts/captura_fixture.py "${URL}"
+      - name: Diagnóstico de tarjetas raras (solo en push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          pip install -q -r requirements.txt
+          python scripts/diagnostico_tecnoempleo.py
+      - if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: python scripts/captura_fixture.py "${URL}"
         env:
           URL: ${{ inputs.url || 'https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276, https://www.tecnoempleo.com/ofertas-trabajo/?pr=,240,252,262,276,&pagina=2' }}
       - uses: actions/upload-artifact@v6
