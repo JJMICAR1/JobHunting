@@ -63,8 +63,9 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
             capt = ahora()
             ofertas = [dataclasses.replace(o, capturada_en=capt) for o in rec.ofertas]
             n_vistas, n_nuevas = db.guardar_ofertas(conn, ofertas, capt)
-            db.registrar_recuento(conn, capt.date(), PORTAL)
-            conn.commit()
+            # Un recorrido bloqueado a medias guarda ofertas pero no el recuento del dia.
+            if not rec.bloqueado:
+                db.registrar_recuento(conn, capt.date(), PORTAL)
     except ParserRoto as e:
         conn and conn.rollback()
         estado, codigo, detalle = "error", 1, f"parser roto: {e}"

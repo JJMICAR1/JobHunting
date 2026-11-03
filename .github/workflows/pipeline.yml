@@ -9,6 +9,10 @@ on:
         type: choice
         options: [dev, dry-run]
         default: dev
+  # Para probar en una rama claude/ antes del merge (dispatch solo funciona desde main).
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/pipeline.yml"]
 
 permissions:
   contents: read

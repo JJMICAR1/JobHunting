@@ -25,12 +25,12 @@ def conectar(url: str) -> psycopg.Connection:
     if not url:
         raise ValueError("URL de base de datos vacia")
     try:
-        conn = psycopg.connect(url)
+        # autocommit: cada conn.transaction() es una transaccion real y se confirma al salir.
+        conn = psycopg.connect(url, autocommit=True)
     except psycopg.Error as e:
         # No propagamos el mensaje original: podria incluir host/usuario.
         raise RuntimeError(f"no se pudo conectar a la base de datos ({type(e).__name__})") from None
     conn.execute("SET TIME ZONE 'UTC'")
-    conn.commit()
     return conn
 
 
