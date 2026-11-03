@@ -21,12 +21,13 @@ def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _resumen(estado, rec, n_nuevas, n_vistas, extra=None) -> str:
+def _resumen(estado, rec, n_nuevas, n_vistas, extra=None, n_unicas=None) -> str:
     n = len(rec.ofertas) if rec else 0
     lineas = [f"## Tecnoempleo: {estado}",
               f"- paginas: {rec.paginas if rec else 0}",
               f"- n_ofertas: {n}",
               f"- n_nuevas: {n_nuevas if n_nuevas is not None else '-'}",
+              f"- n_unicas: {n_unicas if n_unicas is not None else '-'} (puestos unicos)",
               f"- total_anunciado: {rec.total_anunciado if rec else None}",
               f"- n_descartadas: {rec.n_descartadas if rec else 0}",
               f"- parada: {rec.motivo_parada if rec else '-'}"]
@@ -57,6 +58,7 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
             print(f"Error de BD: {type(e).__name__}", file=sys.stderr)
             return 1
     rec, estado, codigo, detalle, n_nuevas, n_vistas = None, "ok", 0, None, None, None
+    n_unicas = None
     try:
         rec = recorrer(fetch=fetch, max_paginas=max_paginas, pausa_s=pausa_s, **kw)
         if rec.bloqueado:
@@ -67,7 +69,7 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
             n_vistas, n_nuevas = db.guardar_ofertas(conn, ofertas, capt)
             # Un recorrido bloqueado a medias guarda ofertas pero no el recuento del dia.
             if not rec.bloqueado:
-                db.registrar_recuento(conn, capt.date(), PORTAL)
+                _, _, n_unicas = db.registrar_recuento(conn, capt.date(), PORTAL)
     except ParserRoto as e:
         conn and conn.rollback()
         estado, codigo, detalle = "error", 1, f"parser roto: {e}"
@@ -83,7 +85,7 @@ def ejecutar(fetch=descargar, dry_run=False, database_url=None, max_paginas=30, 
             print(f"No se pudo registrar la ejecucion: {type(e).__name__}", file=sys.stderr)
             codigo = codigo or 1
         conn.close()
-    texto = _resumen(estado, rec, n_nuevas, n_vistas, detalle)
+    texto = _resumen(estado, rec, n_nuevas, n_vistas, detalle, n_unicas)
     print(texto)
     ruta = os.environ.get("GITHUB_STEP_SUMMARY")
     if ruta:

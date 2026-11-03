@@ -59,13 +59,16 @@ def migrar(conn: psycopg.Connection) -> list[str]:
 
 _UPSERT = """
 INSERT INTO ofertas (portal, id_portal, titulo, url, empresa, ubicacion,
-                     fecha_publicacion, primera_vez, ultima_vez)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     fecha_publicacion, primera_vez, ultima_vez, ciudad, modalidad, huella)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (portal, id_portal) DO UPDATE SET
     titulo = EXCLUDED.titulo,
     url = EXCLUDED.url,
     empresa = EXCLUDED.empresa,
     ubicacion = EXCLUDED.ubicacion,
+    ciudad = EXCLUDED.ciudad,
+    modalidad = EXCLUDED.modalidad,
+    huella = EXCLUDED.huella,
     fecha_publicacion = COALESCE(EXCLUDED.fecha_publicacion, ofertas.fecha_publicacion),
     ultima_vez = GREATEST(ofertas.ultima_vez, EXCLUDED.ultima_vez)
 RETURNING (xmax = 0)
@@ -83,17 +86,20 @@ def guardar_ofertas(conn: psycopg.Connection, ofertas, ahora_utc: datetime) -> t
                 cur.execute(
                     _UPSERT,
                     (o.portal, o.id_portal, o.titulo, o.url, o.empresa, o.ubicacion,
-                     o.fecha_publicacion, ahora_utc, ahora_utc),
+                     o.fecha_publicacion, ahora_utc, ahora_utc,
+                     getattr(o, "ciudad", None), getattr(o, "modalidad", None),
+                     getattr(o, "huella", None)),
                 )
                 if cur.fetchone()[0]:
                     nuevas += 1
     return len(unicas), nuevas
 
 
-def registrar_recuento(conn: psycopg.Connection, dia: date, portal: str) -> tuple[int, int]:
+def registrar_recuento(conn: psycopg.Connection, dia: date, portal: str) -> tuple[int, int, int]:
     """Recalcula en SQL el recuento del dia UTC (idempotente aunque se ejecute varias veces).
 
-    n_vistas = ofertas con ultima_vez en ese dia; n_nuevas = ofertas con primera_vez en ese dia.
+    n_vistas = ofertas con ultima_vez en ese dia; n_nuevas = ofertas con primera_vez en ese dia;
+    n_unicas = huellas distintas entre las vistas (huella NULL cuenta cada fila aparte).
     Debe llamarse el mismo dia UTC de la captura (ultima_vez solo guarda la ultima vista).
     """
     if isinstance(dia, datetime) or not isinstance(dia, date):
@@ -101,18 +107,21 @@ def registrar_recuento(conn: psycopg.Connection, dia: date, portal: str) -> tupl
     with conn.transaction():
         fila = conn.execute(
             """
-            INSERT INTO recuento_diario (dia, portal, n_vistas, n_nuevas)
+            INSERT INTO recuento_diario (dia, portal, n_vistas, n_nuevas, n_unicas)
             SELECT %(dia)s, %(portal)s,
                    count(*) FILTER (WHERE (ultima_vez AT TIME ZONE 'UTC')::date = %(dia)s),
-                   count(*) FILTER (WHERE (primera_vez AT TIME ZONE 'UTC')::date = %(dia)s)
+                   count(*) FILTER (WHERE (primera_vez AT TIME ZONE 'UTC')::date = %(dia)s),
+                   count(DISTINCT coalesce(huella, id_portal))
+                       FILTER (WHERE (ultima_vez AT TIME ZONE 'UTC')::date = %(dia)s)
             FROM ofertas WHERE portal = %(portal)s
             ON CONFLICT (dia, portal) DO UPDATE SET
-                n_vistas = EXCLUDED.n_vistas, n_nuevas = EXCLUDED.n_nuevas
-            RETURNING n_vistas, n_nuevas
+                n_vistas = EXCLUDED.n_vistas, n_nuevas = EXCLUDED.n_nuevas,
+                n_unicas = EXCLUDED.n_unicas
+            RETURNING n_vistas, n_nuevas, n_unicas
             """,
             {"dia": dia, "portal": portal},
         ).fetchone()
-    return fila[0], fila[1]
+    return fila[0], fila[1], fila[2]
 
 
 def registrar_ejecucion(conn: psycopg.Connection, portal: str, inicio: datetime, fin: datetime,
