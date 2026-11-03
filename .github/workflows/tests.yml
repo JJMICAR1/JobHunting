@@ -11,6 +11,21 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Credenciales triviales de un servicio efimero solo para CI: no son un secreto.
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jh_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -18,3 +33,6 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
       - run: pytest -v
+        env:
+          # BD efimera del servicio de CI (no es un secreto).
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jh_test
