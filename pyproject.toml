@@ -1,0 +1,9 @@
+[project]
+name = "jobhunting"
+version = "0.0.1"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: test de contrato en vivo contra un portal (no se ejecuta por defecto)"]
+addopts = "-m 'not live'"
