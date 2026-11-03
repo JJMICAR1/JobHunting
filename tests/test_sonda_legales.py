@@ -150,4 +150,4 @@ def test_main_legales_maximo_dos_paginas_y_prefijo(monkeypatch, capsys):
     lineas = [l for l in out.split("\n") if l != ""]
     assert lineas and all(l.startswith("| ") for l in lineas), lineas
     assert "::" not in out
-    assert "[scraping]" in out
+    assert "[scrap]" in out

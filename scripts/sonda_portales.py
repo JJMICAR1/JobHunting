@@ -111,9 +111,10 @@ LEGALES = [
 ]
 CLAVES_ENLACE_LEGAL = ["aviso legal", "avis legal", "legal", "condiciones", "términos",
                        "terminos", "terms", "condiciones de uso", "condiciones generales"]
-CLAVES_COINCIDENCIA = ["scraping", "robots", "extracción", "extraer", "automatizad", "rastreo",
-                       "crawler", "araña", "spider", "reutiliza", "reproducción",
-                       "minería de datos"]
+CLAVES_COINCIDENCIA = ["scrap", "robot", "extracción", "extraer", "extract", "automatizad",
+                       "automated", "automátic", "rastre", "crawl", "araña", "spider", "bot ",
+                       "reutiliza", "reproduc", "minería de datos", "data mining", "harvest"]
+MAX_TEXTO_BUSQUEDA = 2_000_000  # las claves se buscan en todo el texto; solo se imprimen 15000
 MAX_ENLACES_LEGALES = 2
 ANCHO_CONTEXTO = 300
 
@@ -648,9 +649,10 @@ def main_legales():
             salida(f"--- {e} ({motivo or st}) ---")
             if motivo:
                 continue
-            texto = texto_plano(html, MAX_TEXTO_CONDICIONES)
-            salida(texto)
-            for clave, frag in coincidencias(texto, CLAVES_COINCIDENCIA, ANCHO_CONTEXTO):
+            completo = texto_plano(html, MAX_TEXTO_BUSQUEDA)
+            salida(f"bytes_html={len(html or '')} chars_texto={len(completo)}")
+            salida(completo[:MAX_TEXTO_CONDICIONES])
+            for clave, frag in coincidencias(completo, CLAVES_COINCIDENCIA, ANCHO_CONTEXTO):
                 salida(f"[{clave}] ...{frag}...")
 
 
