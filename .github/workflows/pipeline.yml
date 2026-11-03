@@ -1,0 +1,39 @@
+name: pipeline
+
+# Solo manual. El cron contra produccion se anadira tras el OK del CEO.
+on:
+  workflow_dispatch:
+    inputs:
+      entorno:
+        description: "dev (Neon rama dev) o dry-run (sin escribir en BD)"
+        type: choice
+        options: [dev, dry-run]
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # Salida: 0 ok, 2 bloqueado, 1 error. 1 y 2 hacen fallar el job.
+      - name: Pipeline (dev)
+        if: ${{ inputs.entorno != 'dry-run' }}
+        env:
+          DATABASE_URL: ${{ secrets.NEON_URL_DEV }}
+        run: python -m jobhunting.pipeline
+      - name: Pipeline (dry-run)
+        if: ${{ inputs.entorno == 'dry-run' }}
+        run: python -m jobhunting.pipeline --dry-run
