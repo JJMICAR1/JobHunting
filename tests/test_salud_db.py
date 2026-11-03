@@ -86,3 +86,10 @@ def test_pipeline_error_guarda_ceros(conn, db_url):
     assert run(Fetch({URL_BASE: "<html>x</html>"}), db_url) == 1
     assert conn.execute("SELECT n_ofertas, n_descartadas, total_anunciado FROM ejecuciones").fetchone() \
         == (0, 0, None)
+
+
+def test_cargar_ejecuciones_fallback_sin_003(conn):
+    db.migrar(conn)
+    db.registrar_ejecucion(conn, "tecnoempleo", T, T, "ok", 60, "d", n_descartadas=3, total_anunciado=100)
+    conn.execute("ALTER TABLE ejecuciones DROP COLUMN n_descartadas, DROP COLUMN total_anunciado")
+    assert salud.cargar_ejecuciones(conn) == [salud.Ejecucion("tecnoempleo", T, "ok", 60, "d", 0, None)]

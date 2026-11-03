@@ -290,3 +290,56 @@ def test_main_escribe_step_summary(conn, db_url, monkeypatch, tmp_path):
     sembrar(conn, "feinaactiva", 1, 100)
     assert salud.main(["--entorno", "dev", "--sin-issues"], ahora=AHORA) == 0
     assert "todo bien" in f.read_text()
+
+
+# ---- _limpiar y main de solo lectura ----
+
+def test_limpiar_vacio():
+    assert salud._limpiar(None) == "sin detalle" and salud._limpiar("") == "sin detalle"
+
+
+def test_limpiar_quita_urls_html_y_backticks():
+    t = salud._limpiar("fallo en https://x.com/a?token=abc y <script>`rm`</script>")
+    assert "https://" not in t and "token" not in t
+    assert not any(c in t for c in "<>`")
+
+
+def test_limpiar_una_linea_y_limite():
+    assert salud._limpiar("a\nb\r\n  c") == "a b c"
+    t = salud._limpiar("x" * 500)
+    assert t == "x" * 200 + "…"
+    assert salud._limpiar("x" * 200) == "x" * 200
+
+
+def test_alertas_error_y_bloqueado_usan_limpiar():
+    for est, tipo in (("error", "error"), ("bloqueado", "bloqueado")):
+        r = evaluar_portal(P, [ej(1, 0, est, detalle="ver http://a.b/c?k=1 <b>")], AHORA)
+        assert tipos(r) == [tipo] and "http" not in r[0].mensaje and "<" not in r[0].mensaje
+
+
+def test_main_no_migra(conn, db_url, monkeypatch):
+    from jobhunting import db
+    sembrar(conn, "tecnoempleo", 1, 100)
+    monkeypatch.setenv("DATABASE_URL", db_url)
+
+    def no(*a, **k):
+        raise AssertionError("main no debe migrar")
+    monkeypatch.setattr(db, "migrar", no)
+    assert salud.main(["--entorno", "dev", "--sin-issues"], ahora=AHORA) == 0
+
+
+def test_main_bd_sin_migrar_no_crea_tablas(conn, db_url, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    assert salud.main(["--entorno", "dev", "--sin-issues"], ahora=AHORA) == 1  # no hay tabla
+    n = conn.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() "
+                     "AND table_name IN ('ejecuciones','ofertas','schema_migraciones')").fetchone()[0]
+    assert n == 0
+
+
+def test_main_sin_columnas_003(conn, db_url, monkeypatch, capsys):
+    sembrar(conn, "tecnoempleo", 1, 100)
+    sembrar(conn, "feinaactiva", 1, 100)
+    conn.execute("ALTER TABLE ejecuciones DROP COLUMN n_descartadas, DROP COLUMN total_anunciado")
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    assert salud.main(["--entorno", "dev", "--sin-issues"], ahora=AHORA) == 0
+    assert "todo bien" in capsys.readouterr().out

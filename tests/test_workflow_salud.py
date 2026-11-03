@@ -18,7 +18,13 @@ def paso(wf, nombre):
 
 def test_permisos(wf):
     assert wf["permissions"] == {"contents": "read"}
-    assert wf["jobs"]["salud"]["permissions"] == {"contents": "read", "issues": "write", "actions": "write"}
+    assert wf["jobs"]["salud"]["permissions"] == {"contents": "read", "issues": "write"}
+    assert wf["jobs"]["latido"]["permissions"] == {"actions": "write"}
+
+
+def test_prod_solo_desde_main(wf):
+    assert "github.ref == 'refs/heads/main'" in paso(wf, "(prod)")["if"]
+    assert "github.ref" not in paso(wf, "(dev)")["if"]
 
 
 def test_secretos_por_entorno(wf):
@@ -30,8 +36,12 @@ def test_secretos_por_entorno(wf):
     assert "prod" in prod["if"] and "dev" in dev["if"]
 
 
-def test_latido_solo_en_schedule(wf):
-    assert paso(wf, "Latido")["if"] == "github.event_name == 'schedule'"
+def test_latido_job_aparte_solo_en_schedule(wf):
+    assert wf["jobs"]["latido"]["if"] == "github.event_name == 'schedule'"
+    assert not any("Latido" in p.get("name", "") or "enable" in p.get("run", "")
+                   for p in wf["jobs"]["salud"]["steps"])
+    assert any("enable" in p.get("run", "") for p in wf["jobs"]["latido"]["steps"])
+    assert "needs" not in wf["jobs"]["latido"]
 
 
 def test_ningun_otro_paso_usa_secretos_de_bd(wf):
