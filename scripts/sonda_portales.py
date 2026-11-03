@@ -4,6 +4,7 @@ Una petición GET por portal, sin login ni cookies, respetando robots.txt.
 No guarda el cuerpo HTML. Sale siempre con código 0 (es un informe).
 """
 import json
+import re
 import os
 import sys
 import time
@@ -70,6 +71,16 @@ def clasificar(status, url_final, html, esperadas=None):
 ESPERADAS_GENERICAS = ["oferta", "empleo", "trabajo", "job", "vacante"]
 
 
+def resumen_html(html):
+    """Datos no personales para revisar a mano: título y recuentos de palabras."""
+    bajo = (html or "").lower()
+    m = re.search(r"<title[^>]*>(.*?)</title>", html or "", re.I | re.S)
+    titulo = " ".join(m.group(1).split())[:80] if m else ""
+    return {"titulo": titulo.replace("|", "/"),
+            "n_oferta": bajo.count("oferta"), "n_empleo": bajo.count("empleo"),
+            "n_just_a_moment": bajo.count("just a moment")}
+
+
 def robots_permitido(url):
     p = urlparse(url)
     rp = urllib.robotparser.RobotFileParser()
@@ -131,6 +142,7 @@ def sondear(cfg):
             reg["senales"].append("redirect_prohibido_robots")
             reg["estado"] = "prohibido_robots"
             return reg
+    reg.update(resumen_html(html))
     estado, senales = clasificar(reg["http_status"], reg["url_final"], html,
                                  cfg.get("esperadas"))
     reg["estado"] = estado
@@ -139,11 +151,12 @@ def sondear(cfg):
 
 
 def tabla_md(regs):
-    filas = ["| Portal | Estado | HTTP | robots | bytes | ms | Señales |",
-             "|---|---|---|---|---|---|---|"]
+    filas = ["| Portal | Estado | HTTP | robots | bytes | ms | Señales | Título | n_oferta |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for r in regs:
         filas.append(f"| {r['portal']} | {r['estado']} | {r['http_status']} | {r['robots_ok']} "
-                     f"| {r['bytes']} | {r['ms']} | {', '.join(r['senales'])} |")
+                     f"| {r['bytes']} | {r['ms']} | {', '.join(r['senales'])} "
+                     f"| {r.get('titulo', '')} | {r.get('n_oferta', '')} |")
     return "\n".join(filas) + "\n"
 
 
