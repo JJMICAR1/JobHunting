@@ -302,7 +302,7 @@ class RedirectSeguro(urllib.request.HTTPRedirectHandler):
                 self.bloqueo = ("redirect_prohibido_robots" if ok is False
                                 else "redirect_robots_no_leido")
                 return None  # urllib lanza HTTPError con la 30x original
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, destino)
 
 
 _REDIRECT = RedirectSeguro(robots=lambda u: robots_permitido(u))  # sin cookies
