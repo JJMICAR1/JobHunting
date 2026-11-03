@@ -1,4 +1,4 @@
-"""descargar_bytes: con urlopen falso y con un servidor local en 127.0.0.1 (sin red externa)."""
+"""descargar_bytes: con _abrir falso y con un servidor local en 127.0.0.1 (sin red externa)."""
 import http.server
 import io
 import threading
@@ -59,7 +59,7 @@ def red(monkeypatch):
 
     def instalar(**kw):
         r = Red(**kw)
-        monkeypatch.setattr(descarga.urllib.request, "urlopen", r)
+        monkeypatch.setattr(descarga, "_abrir", r)
         return r
     return instalar
 
@@ -154,7 +154,7 @@ def test_error_de_red_no_filtra_url(red, monkeypatch):
             return Resp(b"")
         raise TimeoutError(req.full_url + "?token=SECRETO")
     monkeypatch.setattr(descarga, "_robots", {})
-    monkeypatch.setattr(descarga.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(descarga, "_abrir", boom)
     with pytest.raises(ErrorDescarga) as e:
         descargar_bytes(URL)
     assert "SECRETO" not in str(e.value)
@@ -254,12 +254,9 @@ def test_local_redireccion_a_otro_host(servidores, monkeypatch):
     origen = servidores({"/x.xml": (302, {"Location": _base(destino) + "/robado.xml"}, b"")})
     with pytest.raises(Bloqueado, match="otro host"):
         descargar_bytes(_base(origen) + "/x.xml")
-    # Hallazgo a vigilar: urllib sigue la redireccion antes de validar, asi que el otro host SI recibe la peticion.
-    # La regla 7 pide parar; se documenta en test_local_redireccion_no_deberia_visitar_otro_host.
+    assert destino.visitas == []
 
 
-@pytest.mark.xfail(strict=True, reason="descargar_bytes valida el host DESPUES de que urllib siga el "
-                   "redirect: el host ajeno ya recibio la peticion GET (y su robots.txt no se consulta)")
 def test_local_redireccion_no_deberia_visitar_otro_host(servidores, monkeypatch):
     monkeypatch.setattr(descarga, "_robots", {})
     destino = servidores({"/robado.xml": (200, {}, XML)})
@@ -267,3 +264,47 @@ def test_local_redireccion_no_deberia_visitar_otro_host(servidores, monkeypatch)
     with pytest.raises(Bloqueado):
         descargar_bytes(_base(origen) + "/x.xml")
     assert destino.visitas == []
+
+
+# ---- _Redireccion
+def test_redireccion_mismo_host_prohibido_por_robots_no_hace_get(servidores, monkeypatch):
+    monkeypatch.setattr(descarga, "_robots", {})
+    s = servidores({"/x.xml": (302, {"Location": "/privado.xml"}, b""), "/privado.xml": (200, {}, XML),
+                    "/robots.txt": (200, {}, b"User-agent: *\nDisallow: /privado\n")})
+    with pytest.raises(Bloqueado, match="robots"):
+        descargar_bytes(_base(s) + "/x.xml")
+    assert "/privado.xml" not in s.visitas
+
+
+def test_redireccion_mismo_host_permitido_se_sigue(servidores, monkeypatch):
+    monkeypatch.setattr(descarga, "_robots", {})
+    s = servidores({"/x.xml": (302, {"Location": "/y.xml"}, b""), "/y.xml": (200, {}, XML)})
+    assert descargar_bytes(_base(s) + "/x.xml") == XML
+    assert s.visitas.count("/y.xml") == 1
+
+
+def test_redireccion_mas_de_3_saltos_es_error(servidores, monkeypatch):
+    monkeypatch.setattr(descarga, "_robots", {})
+    rutas = {f"/r{i}": (302, {"Location": f"/r{i + 1}"}, b"") for i in range(10)}
+    rutas["/r10"] = (200, {}, XML)
+    s = servidores(rutas)
+    with pytest.raises(ErrorDescarga):
+        descargar_bytes(_base(s) + "/r0")
+    assert "/r4" not in s.visitas
+
+
+def test_redireccion_3_saltos_exactos_pasa(servidores, monkeypatch):
+    monkeypatch.setattr(descarga, "_robots", {})
+    s = servidores({"/r0": (302, {"Location": "/r1"}, b""), "/r1": (302, {"Location": "/r2"}, b""),
+                    "/r2": (302, {"Location": "/r3"}, b""), "/r3": (200, {}, XML)})
+    assert descargar_bytes(_base(s) + "/r0") == XML
+
+
+def test_robots_que_redirige_a_otro_host_es_bloqueo(servidores, monkeypatch):
+    monkeypatch.setattr(descarga, "_robots", {})
+    destino = servidores({"/robots.txt": (200, {}, b"User-agent: *\nAllow: /\n")})
+    origen = servidores({"/x.xml": (200, {}, XML),
+                         "/robots.txt": (301, {"Location": _base(destino) + "/robots.txt"}, b"")})
+    with pytest.raises(Bloqueado):
+        descargar_bytes(_base(origen) + "/x.xml")
+    assert destino.visitas == [] and "/x.xml" not in origen.visitas

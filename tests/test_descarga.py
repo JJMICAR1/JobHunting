@@ -29,7 +29,7 @@ class Resp:
 
 
 class Red:
-    """urlopen falso: registra peticiones; robots.txt aparte de la pagina."""
+    """_abrir falso: registra peticiones; robots.txt aparte de la pagina."""
 
     def __init__(self, status=200, cuerpo=HTML_OK, robots="User-agent: *\nAllow: /\n"):
         self.status, self.cuerpo, self.robots = status, cuerpo, robots
@@ -56,7 +56,7 @@ def red(monkeypatch):
 
     def instalar(**kw):
         r = Red(**kw)
-        monkeypatch.setattr(descarga.urllib.request, "urlopen", r)
+        monkeypatch.setattr(descarga, "_abrir", r)
         return r
     return instalar
 
@@ -132,7 +132,7 @@ def test_robots_ilegible_es_error_descarga(red):
         descargar(URL)
 
 
-def test_fallo_de_red_sin_reintento(red):
+def test_fallo_de_red_sin_reintento(red, monkeypatch):
     r = red()
 
     def falla(req, timeout=None):
@@ -140,7 +140,7 @@ def test_fallo_de_red_sin_reintento(red):
         if req.full_url.endswith("/robots.txt"):
             return Resp("User-agent: *\nAllow: /\n")
         raise TimeoutError("t")
-    descarga.urllib.request.urlopen = falla  # monkeypatch ya restaurara el original
+    monkeypatch.setattr(descarga, "_abrir", falla)
     with pytest.raises(ErrorDescarga):
         descargar(URL)
     assert len(r.paginas) == 1
