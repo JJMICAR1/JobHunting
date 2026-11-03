@@ -263,6 +263,19 @@ class _Resp:
         return False
 
 
+class _Opener:
+    def __init__(self, fn):
+        self._fn = fn
+
+    def open(self, req, timeout=None):
+        return self._fn(req, timeout=timeout)
+
+
+def _fabrica(fn):
+    """Fabrica de openers falsa: ignora los handlers; .open(req, timeout=) llama a fn."""
+    return lambda *handlers: _Opener(fn)
+
+
 def _red(monkeypatch, respuesta, robots=True):
     monkeypatch.setattr(sonda, "robots_permitido", lambda u: robots)
     monkeypatch.setattr(sonda.time, "sleep", lambda s: None)
@@ -271,7 +284,7 @@ def _red(monkeypatch, respuesta, robots=True):
         if isinstance(respuesta, Exception):
             raise respuesta
         return respuesta
-    monkeypatch.setattr(sonda.urllib.request, "urlopen", fake)
+    monkeypatch.setattr(sonda, "_OPENER_FACTORY", _fabrica(fake))
 
 
 def test_sondear_json_200(monkeypatch):
@@ -347,8 +360,8 @@ def test_sondear_redirect_a_host_prohibido(monkeypatch):
     url, final = "https://x.test/a", "https://y.test/b"
     monkeypatch.setattr(sonda, "robots_permitido", lambda u: u != final)
     monkeypatch.setattr(sonda.time, "sleep", lambda s: None)
-    monkeypatch.setattr(sonda.urllib.request, "urlopen",
-                        lambda req, timeout=None: _Resp(b"<html>oferta</html>", url=final, ctype="text/html"))
+    monkeypatch.setattr(sonda, "_OPENER_FACTORY", _fabrica(
+        lambda req, timeout=None: _Resp(b"<html>oferta</html>", url=final, ctype="text/html")))
     reg = sonda.sondear({"portal": "X", "url": url})
     assert reg["estado"] == "prohibido_robots"
     assert "redirect" in reg["senales"] and "redirect_prohibido_robots" in reg["senales"]
@@ -387,9 +400,10 @@ def test_robots_permitido_5xx_es_none_y_4xx_es_true(monkeypatch):
         def f(req, timeout=None):
             raise urllib.error.HTTPError("https://x.test/robots.txt", code, "e", {}, io.BytesIO(b""))
         return f
-    monkeypatch.setattr(sonda.urllib.request, "urlopen", lanza(404))
+    monkeypatch.setattr(sonda, "_OPENER_FACTORY", _fabrica(lanza(404)))
     assert sonda.robots_permitido("https://x.test/a") is True
-    monkeypatch.setattr(sonda.urllib.request, "urlopen", lanza(503))
+    sonda.vaciar_cache_robots()
+    monkeypatch.setattr(sonda, "_OPENER_FACTORY", _fabrica(lanza(503)))
     assert sonda.robots_permitido("https://x.test/a") is None
 
 

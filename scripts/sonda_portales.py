@@ -305,29 +305,58 @@ class RedirectSeguro(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, destino)
 
 
-_REDIRECT = RedirectSeguro(robots=lambda u: robots_permitido(u))  # sin cookies
+# Punto de inyección (los tests pueden sustituirlo): fábrica de openers. Sin cookies.
+_OPENER_FACTORY = urllib.request.build_opener
+MAX_REDIRECTS_ROBOTS = 5  # RFC 9309: hasta 5 saltos al buscar robots.txt
 
 
-def _abrir(req):
-    """urlopen con redirecciones controladas por robots.txt (sin cookies)."""
-    _REDIRECT.bloqueo = None
-    urllib.request.install_opener(urllib.request.build_opener(_REDIRECT))
-    return urllib.request.urlopen(req, timeout=TIMEOUT)
+class _RedirectRobots(urllib.request.HTTPRedirectHandler):
+    """Redirecciones estándar de robots.txt (máx. 5), sin comprobación de robots."""
+    max_redirections = MAX_REDIRECTS_ROBOTS
+
+
+def _abrir(req, handler=None):
+    """Abre `req` con un opener propio (sin install_opener) y un RedirectSeguro nuevo.
+
+    Devuelve (respuesta, handler). Si hay excepción la respuesta no existe: pasa tu propio
+    `handler` para leer `handler.bloqueo` también en ese caso.
+    """
+    if handler is None:
+        handler = RedirectSeguro(robots=robots_permitido)
+    return _OPENER_FACTORY(handler).open(req, timeout=TIMEOUT), handler
+
+
+_ROBOTS_CACHE = {}  # origen -> RobotFileParser | True (sin restricciones) | None (no concluyente)
+
+
+def vaciar_cache_robots():
+    _ROBOTS_CACHE.clear()
+
+
+def _cargar_robots(origen):
+    """RobotFileParser, True (4xx final = sin restricciones) o None (3xx/5xx/error)."""
+    rp = urllib.robotparser.RobotFileParser()
+    try:
+        req = urllib.request.Request(origen + "/robots.txt", headers={"User-Agent": USER_AGENT})
+        with _OPENER_FACTORY(_RedirectRobots()).open(req, timeout=TIMEOUT) as r:
+            texto = r.read(MAX_LECTURA_ROBOTS).decode("utf-8", "replace")
+        rp.parse(texto.splitlines())
+        rp.texto = texto  # para informes (diagnóstico)
+        return rp
+    except urllib.error.HTTPError as e:
+        return True if e.code in (404, 410) else None  # 401/403/429, otros 4xx, 3xx, 5xx: no concluyente
+    except Exception:
+        return None
 
 
 def robots_permitido(url):
     p = urlparse(url)
-    rp = urllib.robotparser.RobotFileParser()
-    robots_url = f"{p.scheme}://{p.netloc}/robots.txt"
-    try:
-        req = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            rp.parse(r.read(MAX_LECTURA_ROBOTS).decode("utf-8", "replace").splitlines())
-    except urllib.error.HTTPError as e:
-        # robots.txt 4xx = sin restricciones publicadas; 5xx = no concluyente
-        return True if e.code < 500 else None
-    except Exception:
-        return None  # no se pudo leer
+    origen = f"{p.scheme}://{p.netloc}"
+    if origen not in _ROBOTS_CACHE:
+        _ROBOTS_CACHE[origen] = _cargar_robots(origen)
+    rp = _ROBOTS_CACHE[origen]
+    if rp is None or rp is True:
+        return rp
     return rp.can_fetch(USER_AGENT, url)
 
 
@@ -351,9 +380,11 @@ def sondear(cfg):
     tipo = cfg.get("tipo", "html")
     tope = cfg.get("max_bytes") or MAX_LECTURA
     reg["tipo"] = tipo
+    red = RedirectSeguro(robots=robots_permitido)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with _abrir(req) as r:
+        resp, red = _abrir(req, red)
+        with resp as r:
             reg["http_status"] = r.status
             reg["url_final"] = r.geturl()
             try:
@@ -380,9 +411,9 @@ def sondear(cfg):
         reg["ms"] = int((time.monotonic() - t0) * 1000)
         return reg
     reg["ms"] = int((time.monotonic() - t0) * 1000)
-    if _REDIRECT.bloqueo:
-        reg["senales"] += ["redirect", _REDIRECT.bloqueo]
-        reg["estado"] = ("prohibido_robots" if _REDIRECT.bloqueo == "redirect_prohibido_robots"
+    if red.bloqueo:
+        reg["senales"] += ["redirect", red.bloqueo]
+        reg["estado"] = ("prohibido_robots" if red.bloqueo == "redirect_prohibido_robots"
                          else "error")
         return reg
     if reg["url_final"] and reg["url_final"] != url:
@@ -428,9 +459,11 @@ def condicion(cfg):
         return f"===== {nombre} {url} ({motivo}) =====\n"
     time.sleep(PAUSA_ROBOTS_S)
     status, html = None, ""
+    red = RedirectSeguro(robots=robots_permitido)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with _abrir(req) as r:
+        resp, red = _abrir(req, red)
+        with resp as r:
             status = r.status
             html = r.read(MAX_LECTURA_CONDICIONES).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
@@ -441,8 +474,8 @@ def condicion(cfg):
             pass
     except Exception as e:
         return f"===== {nombre} {url} (excepcion:{type(e).__name__}) =====\n"
-    if _REDIRECT.bloqueo:
-        return f"===== {nombre} {url} ({_REDIRECT.bloqueo}) =====\n"
+    if red.bloqueo:
+        return f"===== {nombre} {url} ({red.bloqueo}) =====\n"
     cab = f"===== {nombre} {url} ({status}) =====\n"
     if status is not None and status >= 400:
         return cab + f"[sin texto: HTTP {status}]\n"

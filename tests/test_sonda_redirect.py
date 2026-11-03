@@ -104,7 +104,6 @@ def _robots_solo(monkeypatch, prohibe=(), valor=True):
     def f(url):
         return False if any(url.endswith(p) for p in prohibe) else valor
     monkeypatch.setattr(sonda, "robots_permitido", f)
-    monkeypatch.setattr(sonda._REDIRECT, "robots", f)
 
 
 def test_servidor_redirect_permitido_sigue(servidor, monkeypatch):
@@ -130,7 +129,6 @@ def test_sondear_redirect_robots_no_leido_es_error(servidor, monkeypatch):
     base, pet = servidor
     f = lambda u: True if u.endswith("/origen") else None  # noqa: E731
     monkeypatch.setattr(sonda, "robots_permitido", f)
-    monkeypatch.setattr(sonda._REDIRECT, "robots", f)
     reg = sonda.sondear({"portal": "L", "url": base + "/origen"})
     assert reg["estado"] == "error"
     assert "redirect_robots_no_leido" in reg["senales"]
@@ -259,7 +257,11 @@ def test_robots_lee_como_maximo_max_lectura(monkeypatch):
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(sonda.urllib.request, "urlopen", lambda *a, **k: R())
+    class Op:
+        def open(self, req, timeout=None):
+            return R()
+
+    monkeypatch.setattr(sonda, "_OPENER_FACTORY", lambda *h: Op())
     assert sonda.robots_permitido("https://p.test/x") is True
     assert pedidos == [sonda.MAX_LECTURA_ROBOTS]
 
