@@ -2,6 +2,7 @@
 
 - `NNN_nombre.sql` se aplican en orden por `jobhunting.db.migrar`; son idempotentes y se registran en `schema_migraciones`.
 - `NNN_nombre.down.sql` es la reversion manual (solo dev; `migrar` la ignora).
+- `004_mercado`: `recuento_diario.n_desaparecidas` y vistas `v_mercado_diario` / `v_mercado_hoy` (deltas 1d/7d por portal).
 - Solo contra la rama `dev` de Neon; produccion la migra el pipeline.
 
 ## Tamano y retencion (limite 0,5 GB de Neon free)
