@@ -27,13 +27,14 @@ def esquema(conn):
 def test_migrar_dos_veces(conn):
     nuevas = db.migrar(conn)
     assert nuevas == ["001_inicial", "002_ciudad_modalidad_huella", "003_ejecuciones_salud",
-                     "004_mercado", "005_avisos"]
+                     "004_mercado", "005_avisos", "006_etiquetado"]
     e1 = esquema(conn)
     assert db.migrar(conn) == []
     assert esquema(conn) == e1
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 5
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 6
     tablas = {r[0] for r in e1}
-    assert {"ofertas", "recuento_diario", "ejecuciones", "avisos", "schema_migraciones"} <= tablas
+    assert {"ofertas", "recuento_diario", "ejecuciones", "avisos", "schema_migraciones", "config",
+               "envios_etiquetado", "etiquetas"} <= tablas
 
 
 def test_conectar_url_vacia():

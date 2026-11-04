@@ -72,7 +72,7 @@ def test_idempotencia_dos_ejecuciones(conn, db_url, fetch_ok, capsys):
     assert estado(conn) == e1  # mismo estado, sin duplicados
     ejec = conn.execute("SELECT estado, n_ofertas FROM ejecuciones").fetchall()
     assert ejec == [("ok", 60), ("ok", 60)]
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 5
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 6
     out = capsys.readouterr()
     assert db_url not in out.out + out.err
 

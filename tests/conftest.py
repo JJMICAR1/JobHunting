@@ -56,9 +56,9 @@ def db_url():
 def conn(db_url):
     from jobhunting import db
     c = db.conectar(db_url)
-    c.execute("DROP TABLE IF EXISTS ofertas, recuento_diario, ejecuciones, avisos, schema_migraciones CASCADE")
+    c.execute("DROP TABLE IF EXISTS etiquetas, envios_etiquetado, config, ofertas, recuento_diario, ejecuciones, avisos, schema_migraciones CASCADE")
     yield c
-    c.execute("DROP TABLE IF EXISTS ofertas, recuento_diario, ejecuciones, avisos, schema_migraciones CASCADE")
+    c.execute("DROP TABLE IF EXISTS etiquetas, envios_etiquetado, config, ofertas, recuento_diario, ejecuciones, avisos, schema_migraciones CASCADE")
     c.close()
 
 

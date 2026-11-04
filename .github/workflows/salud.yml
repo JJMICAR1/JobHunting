@@ -96,6 +96,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          for wf in pipeline.yml salud.yml; do
+          for wf in pipeline.yml salud.yml etiquetado.yml; do
             gh api -X PUT "repos/$REPO/actions/workflows/$wf/enable" && echo "$wf activo"
           done

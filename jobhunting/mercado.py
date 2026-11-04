@@ -10,12 +10,12 @@ La URL de la API lleva el token: ningún error se imprime con su mensaje, solo c
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
-import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+
+from jobhunting.telegram import http_telegram  # noqa: F401  (se reexporta: mercado.http_telegram)
 
 MAX_CARACTERES = 4000   # el límite de Telegram es 4096
 TIMEOUT = 20
@@ -157,20 +157,6 @@ def formatear(filas, entorno: str, hoy_utc: date | datetime) -> str:
     if feina:
         bloques.append(f"Fuente: Feina Activa (Generalitat de Catalunya), datos del {_fecha_corta(feina[0].dia)}.")
     return "\n\n".join(bloques)[:MAX_CARACTERES]
-
-
-def http_telegram(url: str, datos: dict):
-    """POST JSON -> (status, json). Los errores HTTP devuelven su código; el resto se propaga."""
-    import urllib.error
-
-    req = urllib.request.Request(url, method="POST", data=json.dumps(datos).encode(),
-                                 headers={"Content-Type": "application/json", "User-Agent": "jobhunting-mercado"})
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            raw = r.read()
-            return r.status, json.loads(raw) if raw else None
-    except urllib.error.HTTPError as e:
-        return e.code, None
 
 
 def enviar(texto: str, token: str, chat_id: str, http=None) -> None:
