@@ -1,24 +1,25 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-03 (Fase 6 construida; falta la puerta del CEO)_
+_Última actualización: 2026-11-04 (Fase 6 OK; siguiente Fase 7)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
 
 1. En la tarea "Reparador JobHunting" (claude.ai/code → Routines): poner la hora a las **9:23** de Madrid y quitar los
    conectores Canva y Descript, si aún no está hecho.
-2. PR de la Fase 6 fusionado (2026-11-03). El 2026-11-04 debe llegar a Telegram "Mercado 2026-11-04" (prod) hacia las 7:30
-   de Madrid. Si está bien: abrir sesión nueva y escribir "Fase 6 OK".
+2. Cada mañana: mirar que llega "Mercado laboral en Catalunya" a Telegram. Si un día no llega antes de las 14:00 de
+   Madrid, lanzar a mano Actions → pipeline → Run workflow → rama `main`, entorno `prod`.
+3. Abrir una sesión nueva y escribir **"Empezamos la Fase 7"**. Ir pensando qué ofertas quieres y cuáles no (puesto,
+   palabras clave, ciudades, remoto). Eso NO va al repo: irá a Neon.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 6 — Control de mercado: construida (2026-11-03), falta la puerta del CEO.**
-Puerta propuesta: el CEO recibe en Telegram el recuento de dev (manual) y, tras fusionar, el de prod tras el cron.
-2026-11-03: bot creado y secretos `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` guardados; `mercado` en dev enviado a Telegram (ok).
-Si Telegram responde 401: el secreto del token está mal (sin `bot` delante, sin espacios, o token revocado).
-Al empezar la siguiente sesión: comprobar en Actions que el cron de prod corrió (evento schedule), que `salud` y `mercado`
-corrieron tras él y que `recuento_diario` de `production` tiene fila del día para `tecnoempleo` y `feinaactiva`.
+**Fase 6 — Control de mercado: OK (CEO, 2026-11-04).** Siguiente: **Fase 7 — Reglas + etiquetado Sí/No** (puerta: 100 etiquetas;
+dónde alojar el bot de Telegram para etiquetar se decide en esta fase).
+Al empezar la Fase 7: comprobar en Actions si el cron del pipeline (05:17 UTC) o sus respaldos (06:47, 09:23, 12:53) se
+dispararon con evento `schedule`. El 2026-11-04 GitHub no lanzó el de 05:17 (se ejecutó prod a mano). Si siguen sin
+dispararse, proponer al CEO el plan B (cron-job.org con token solo de Actions).
 
 **Fase 5 — Salud y reparación: OK (CEO, 2026-11-03).**
 Simulacro 2026-11-03: selector de Tecnoempleo roto a propósito → pipeline en Neon dev (0 ofertas) → `salud` abrió
@@ -26,7 +27,6 @@ el issue #14 → arreglo con test de regresión (PR #15, hecho desde la sesión 
 pipeline en dev con el arreglo → `salud` cerró el #14 sola.
 Reparador automático: la tarea "Reparador JobHunting" (creada por el CEO en claude.ai) lee el repo y los issues
 (prueba manual: "Sin alertas"). Aún no ha reparado una alerta real por sí sola.
-El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
@@ -51,8 +51,9 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 4. Fuentes | OK (CEO) |
 | 4.5 Fuentes pendientes | Más adelante |
 | 5. Salud y reparación | OK (CEO) |
-| 6. Control de mercado | Construida; falta puerta |
-| 7–9 | Sin empezar |
+| 6. Control de mercado | OK (CEO) |
+| 7. Reglas + etiquetado | Siguiente |
+| 8–9 | Sin empezar |
 
 ## Qué hay
 - `.claude/agents/`: scraper-dev, tester, db-engineer, ml-engineer, devops, reviewer
