@@ -151,7 +151,7 @@ def test_main_prod_vacia_migra_antes_de_consultar(conn, db_url, espia, monkeypat
     monkeypatch.setenv("DATABASE_URL", db_url)  # `conn` ha dejado la BD sin tablas
     assert pipeline.main(["--solo-si-falta"]) == 0
     assert sorted(p for p, _ in espia) == sorted(pipeline.PORTALES)
-    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 5
+    assert conn.execute("SELECT count(*) FROM schema_migraciones").fetchone()[0] == 6
     assert conn.execute("SELECT count(*) FROM ejecuciones").fetchone()[0] == 0
 
 
