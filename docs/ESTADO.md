@@ -27,7 +27,6 @@ el issue #14 → arreglo con test de regresión (PR #15, hecho desde la sesión 
 pipeline en dev con el arreglo → `salud` cerró el #14 sola.
 Reparador automático: la tarea "Reparador JobHunting" (creada por el CEO en claude.ai) lee el repo y los issues
 (prueba manual: "Sin alertas"). Aún no ha reparado una alerta real por sí sola.
-El cron de prod está activo desde el 2026-11-03 (05:17 UTC); su primera ejecución es el 2026-11-04.
 
 ## Fase 4.5 — Fuentes pendientes (más adelante, sin bloquear las fases siguientes)
 Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución en Neon dev y revisión del CEO).
