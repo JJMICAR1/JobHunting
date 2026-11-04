@@ -157,7 +157,7 @@ def _ver(r: Reglas, progreso: dict) -> str:
     if r.ignorar:
         lines.append(f"Ignorados: {l(r.ignorar)}")
     a = p.get("auto")
-    if a:
+    if a and any(a.values()):
         lines.append("Aprendido de tus Sí/No: " + "; ".join(
             f"{n}: {l(a.get(k) or [])}" for n, k in (("Sí", "si"), ("No", "no"), ("Ciudades", "ciudades"),
                                                      ("Modalidades", "modalidades")) if a.get(k)))
