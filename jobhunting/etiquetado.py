@@ -329,12 +329,14 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
     if real and pendientes == lote:   # no se repite si se reanuda un lote cortado
         _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": intro}, http)
     elif not real:
-        print(intro + "\n")
+        # Log publico: solo contadores (ni ofertas elegidas ni terminos aprendidos, que son datos personales).
+        n_reglas = sum(1 for c in elegidas if c["muestra"] == "reglas")
+        n_auto = len(auto.si) + len(auto.no) + len(auto.ciudades) + len(auto.modalidades)
+        print(f"(sin enviar) {len(elegidas)} ofertas: {n_reglas} por reglas, {len(elegidas) - n_reglas} al azar; "
+              f"{n_auto} términos aprendidos")
+        return len(elegidas)
     for c in elegidas:
         texto = formatear(c, entorno, not reglas.vacia())
-        if not real:
-            print(f"--- [{c['muestra']}] ---\n{texto}\n")
-            continue
         envio_id = registrar_envio(conn, c["portal"], c["id_portal"], ahora, c["muestra"], c["nota"])
         if envio_id is None:
             continue

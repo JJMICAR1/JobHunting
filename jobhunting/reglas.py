@@ -149,9 +149,10 @@ def _ver(r: Reglas, progreso: dict) -> str:
     def l(xs):
         return ", ".join(xs) if xs else "(vacío)"
     p = progreso or {}
+    # El progreso va primero: si el texto se recorta (4000 car.), no se pierde.
     lines = [
-        f"Sí: {l(r.si)}", f"No: {l(r.no)}", f"Ciudades: {l(r.ciudades)}", f"Modalidades: {l(r.modalidades)}",
         f"Progreso: {p.get('total', 0)}/{p.get('meta', META)} (Sí {p.get('si', 0)}, No {p.get('no', 0)})",
+        f"Sí: {l(r.si)}", f"No: {l(r.no)}", f"Ciudades: {l(r.ciudades)}", f"Modalidades: {l(r.modalidades)}",
     ]
     if r.ignorar:
         lines.append(f"Ignorados: {l(r.ignorar)}")
