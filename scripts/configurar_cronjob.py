@@ -74,12 +74,17 @@ def configurar(clave: str, gh_token: str, llamar=http) -> int:
     fallos = 0
     for titulo, (wf, minutos, horas) in TAREAS.items():
         datos = {"job": job(titulo, wf, minutos, horas, gh_token)}
-        if titulo in existentes:
-            st, _ = llamar("PATCH", f"/jobs/{existentes[titulo]}", clave, datos)
-            accion = f"actualizada (id {existentes[titulo]})"
-        else:
-            st, r = llamar("PUT", "/jobs", clave, datos)
-            accion = f"creada (id {(r or {}).get('jobId')})"
+        try:
+            if titulo in existentes:
+                st, _ = llamar("PATCH", f"/jobs/{existentes[titulo]}", clave, datos)
+                accion = f"actualizada (id {existentes[titulo]})"
+            else:
+                st, r = llamar("PUT", "/jobs", clave, datos)
+                accion = f"creada (id {(r or {}).get('jobId')})"
+        except RuntimeError as e:   # un fallo de red en una tarea no impide intentar la otra
+            print(f"Error: {titulo}: {e}")
+            fallos += 1
+            continue
         if 200 <= st < 300:
             print(f"{titulo}: {accion}")
         else:
