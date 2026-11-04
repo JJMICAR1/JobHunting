@@ -39,6 +39,10 @@ Comandos (solo desde el chat `TELEGRAM_CHAT_ID`; los demás se ignoran):
      se responde con `answerCallbackQuery` y se edita el mensaje para mostrar «Sí ✅» o «No ❌».
    - Los comandos solo se aplican en prod (en dev se ignoran).
    - Volver a procesar el mismo update deja el mismo estado.
+   - Como prod confirma todos los updates, un clic en un mensaje de dev (`d:`) se pierde si prod corre antes que dev.
+     Es aceptable: dev solo sirve para probar.
+   - Si `config.reglas` tiene un formato no válido, el comando responde con un aviso y se da por consumido
+     (un update que siempre falla no bloquea el offset).
 2. **Enviar el lote**: una vez al día (tabla `avisos`, tipo `etiquetado`), solo si hay ofertas vistas hoy (`ultima_vez` de hoy, UTC).
    Candidatas: vistas hoy y no enviadas nunca. `round(lote*0,7)` las de mejor nota (empate: más reciente primero) y el resto
    al azar entre las demás (`random.Random(dia)`: el mismo día da el mismo lote). Si no hay reglas, todas van al azar.
