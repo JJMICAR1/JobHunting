@@ -127,6 +127,15 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
     se salta si cancelled), manual dev/prod y push en `claude/**` del propio yml (dev). `contents: read`.
   - Tests: 660 con BD (75 se saltan sin BD). Reviewer: aprobado sin bloqueantes.
 
+- Fase 6, cron de respaldo (2026-11-04): el cron de las 05:17 UTC NO se disparó el 2026-11-04 (ningún run `schedule`,
+  nada en cola). Solución: crons de respaldo 06:47, 09:23 y 12:53 UTC con `--solo-si-falta` (por portal: solo los que hoy
+  no tienen ejecución `ok` ni `bloqueado`; un bloqueo no se reintenta el mismo día); dispatch manual `prod` (solo desde
+  `main`, fuerza la ejecución); run-name `pipeline prod|dev|dry-run`; `salud` y `mercado` eligen prod si el pipeline vino
+  de main y (schedule o dispatch "pipeline prod"); concurrency del pipeline separada por entorno.
+  Migración 005: tabla `avisos(dia, tipo)`. `mercado` en prod envía una vez al día, solo con todos los portales con datos
+  de hoy o, desde las 13 UTC, con los que haya. Plan B si GitHub deja de lanzar crons: cron-job.org (necesita OK del CEO
+  y un token con permiso solo de Actions). Tests: 731 con BD.
+
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.

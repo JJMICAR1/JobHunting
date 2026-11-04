@@ -1,6 +1,6 @@
 """Pipeline diario: recorre los portales (Tecnoempleo, Feina Activa) y guarda en Postgres.
 
-Uso: python -m jobhunting.pipeline [--dry-run] [--portal tecnoempleo|feinaactiva|todos]   (DATABASE_URL por entorno; nunca se imprime)
+Uso: python -m jobhunting.pipeline [--dry-run] [--portal tecnoempleo|feinaactiva|todos] [--solo-si-falta]   (DATABASE_URL por entorno; nunca se imprime)
 Salida: 0 ok; 2 bloqueado; 1 error / parser roto.
 """
 from __future__ import annotations
@@ -136,11 +136,60 @@ def ejecutar(portal="tecnoempleo", **kw) -> int:
     return ejecutar_portal(portal, **kw)
 
 
+def portales_pendientes(filas, hoy) -> list[str]:
+    """Pura: portales de PORTALES sin ninguna ejecucion 'ok' ni 'bloqueado' en el dia UTC `hoy`
+    (un bloqueo no se reintenta el mismo dia). `filas`: iterable de (portal, estado, fin)."""
+    cubiertos = set()
+    for portal, estado, fin in filas:
+        if estado not in ("ok", "bloqueado"):
+            continue
+        if isinstance(fin, datetime):
+            fin = (fin.astimezone(timezone.utc) if fin.tzinfo else fin).date()
+        if fin == hoy:
+            cubiertos.add(portal)
+    return [p for p in PORTALES if p not in cubiertos]
+
+
+def ya_ejecutado_hoy(filas, hoy) -> bool:
+    return not portales_pendientes(filas, hoy)
+
+
+def _pendientes_en_bd(database_url, ahora=_ahora) -> list[str] | None:
+    """Migra y consulta `ejecuciones`. None si no se pudo (falla abierto: se ejecuta todo)."""
+    try:
+        conn = db.conectar(database_url)
+        try:
+            db.migrar(conn)
+            conn.commit()
+            hoy = ahora().date()
+            filas = conn.execute(
+                "SELECT portal, estado, fin FROM ejecuciones WHERE fin >= %s::date::timestamptz",
+                (hoy,)).fetchall()
+        finally:
+            conn.close()
+        return portales_pendientes(filas, hoy)
+    except Exception as e:
+        print(f"No se pudo comprobar ejecuciones previas ({type(e).__name__}); se ejecuta", file=sys.stderr)
+        return None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="jobhunting.pipeline")
     ap.add_argument("--dry-run", action="store_true", help="sin BD: solo recorre e imprime")
     ap.add_argument("--portal", choices=[*PORTALES, "todos"], default="todos")
+    ap.add_argument("--solo-si-falta", action="store_true",
+                    help="no scrapear si hoy (UTC) ya hay ejecucion ok de cada portal (crons de respaldo)")
     a = ap.parse_args(argv)
+    url = os.environ.get("DATABASE_URL")
+    if a.solo_si_falta and not a.dry_run and url:
+        pend = _pendientes_en_bd(url)
+        if pend is not None:
+            if a.portal != "todos":
+                pend = [p for p in pend if p == a.portal]
+            if not pend:
+                print("ya ejecutado hoy: cada portal tiene una ejecucion ok o bloqueada; no se vuelve a scrapear")
+                return 0
+            return _peor(ejecutar(portal=p, dry_run=False, database_url=url) for p in pend)
     return ejecutar(portal=a.portal, dry_run=a.dry_run, database_url=os.environ.get("DATABASE_URL"))
 
 

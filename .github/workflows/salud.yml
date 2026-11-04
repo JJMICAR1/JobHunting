@@ -50,12 +50,14 @@ jobs:
         env:
           EVENTO: ${{ github.event_name }}
           EVENTO_PIPELINE: ${{ github.event.workflow_run.event }}
+          RAMA_PIPELINE: ${{ github.event.workflow_run.head_branch }}
+          TITULO_PIPELINE: ${{ github.event.workflow_run.display_title }}
           ENTORNO_MANUAL: ${{ inputs.entorno }}
         run: |
           case "$EVENTO" in
             schedule) E=prod; H=28 ;;
-            # El pipeline solo escribe en prod cuando lo lanza el cron; cualquier otro evento es dev.
-            workflow_run) if [ "$EVENTO_PIPELINE" = schedule ]; then E=prod; H=28; else E=dev; H=0; fi ;;
+            # El pipeline escribe en prod desde main si lo lanza el cron o un dispatch 'pipeline prod'; el resto es dev.
+            workflow_run) if [ "$RAMA_PIPELINE" = main ] && { [ "$EVENTO_PIPELINE" = schedule ] || { [ "$EVENTO_PIPELINE" = workflow_dispatch ] && [ "$TITULO_PIPELINE" = "pipeline prod" ]; }; }; then E=prod; H=28; else E=dev; H=0; fi ;;
             workflow_dispatch) E="$ENTORNO_MANUAL"; if [ "$E" = prod ]; then H=28; else H=0; fi ;;
             *) E=dev; H=0 ;;
           esac

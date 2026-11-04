@@ -43,7 +43,13 @@ def test_prod_solo_si_el_pipeline_vino_de_schedule(wf):
     elegir = paso(wf, "Elegir entorno")
     assert elegir["env"]["EVENTO_PIPELINE"] == "${{ github.event.workflow_run.event }}"
     run = elegir["run"]
-    assert re.search(r'workflow_run\)\s*if \[ "\$EVENTO_PIPELINE" = schedule \]; then E=prod; else E=dev', run)
+    assert elegir["env"]["RAMA_PIPELINE"] == "${{ github.event.workflow_run.head_branch }}"
+    assert elegir["env"]["TITULO_PIPELINE"] == "${{ github.event.workflow_run.display_title }}"
+    # prod solo si el pipeline vino de main Y (schedule o dispatch 'pipeline prod'); si no, dev
+    assert re.search(r'workflow_run\)\s*if \[ "\$RAMA_PIPELINE" = main \]', run)
+    assert 'EVENTO_PIPELINE" = schedule' in run and 'TITULO_PIPELINE" = "pipeline prod"' in run
+    assert re.search(r"then E=prod; else E=dev; fi", run)
+    # la logica real se ejecuta en test_workflow_entorno.py
     # el resto de eventos nunca da prod por defecto
     assert re.search(r"\*\)\s*E=dev", run)
     assert "prod" in paso(wf, "(prod)")["if"] and "'prod'" not in paso(wf, "(dev)")["if"]
