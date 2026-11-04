@@ -180,10 +180,12 @@ def teclado(entorno: str, envio_id: int) -> dict:
 def parsear_callback(data: str, entorno: str):
     """(etiqueta_bool, envio_id) o None si no es de este entorno o esta mal formado."""
     partes = (data or "").split(":")
-    if len(partes) != 3 or partes[0] != PREFIJO[entorno] or partes[1] not in ("s", "n") or not partes[2].isdigit():
+    if len(partes) != 3 or partes[0] != PREFIJO[entorno] or partes[1] not in ("s", "n") or not (partes[2].isascii() and partes[2].isdigit() and len(partes[2]) <= 18):
         return None
     return partes[1] == "s", int(partes[2])
 
+
+MAX_TEXTO = 4000   # Telegram admite 4096 caracteres por mensaje
 
 # --- recoger ---
 
@@ -243,7 +245,14 @@ def _procesar(conn, u: dict, entorno: str, token: str, chat: str, ahora: datetim
     texto = m.get("text") or ""
     if not texto.startswith("/"):
         return
-    reglas = leer_reglas(conn)
+    try:
+        reglas = leer_reglas(conn)
+    except RuntimeError:
+        # Update "veneno": se responde y se da por consumido, para no bloquear el offset cada hora.
+        _intentar(tg.llamar, token, "sendMessage",
+                  {"chat_id": chat, "text": "Las reglas guardadas tienen un formato no válido (revisar config.reglas en Neon)"},
+                  http)
+        return
     lote = R.parsear_lote(texto)
     if isinstance(lote, int):
         guardar_config(conn, "lote", lote, ahora)
@@ -253,7 +262,7 @@ def _procesar(conn, u: dict, entorno: str, token: str, chat: str, ahora: datetim
         nuevas, resp = R.aplicar_comando(reglas, texto, prog)
         if nuevas != reglas:
             guardar_config(conn, "reglas", nuevas.a_dict(), ahora)
-    _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": resp}, http)
+    _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": resp[:MAX_TEXTO]}, http)
 
 
 # --- enviar lote ---
@@ -318,7 +327,8 @@ def main(argv=None, ahora=None, http=None) -> int:
         print("Falta DATABASE_URL", file=sys.stderr)
         return 1
     ahora = ahora or datetime.now(timezone.utc)
-    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    chat = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
     real = bool(token and chat) and not a.dry_run
     if not real and not a.dry_run:
         print("::warning::Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID: solo se muestra lo que se haría")
