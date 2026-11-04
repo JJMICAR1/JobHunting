@@ -59,30 +59,104 @@ def _fecha(d) -> str:
     return d.isoformat() if hasattr(d, "isoformat") else str(d)
 
 
+DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+         "septiembre", "octubre", "noviembre", "diciembre"]
+NOMBRES = {"feinaactiva": "Feina Activa", "tecnoempleo": "Tecnoempleo"}
+
+
+def _n(v: int) -> str:
+    return f"{v:,}".replace(",", ".")
+
+
+def _pct(v: float) -> str:
+    return f"{v:+.1f}".replace(".", ",") + " %"
+
+
+def _fecha_larga(d: date) -> str:
+    return f"{DIAS[d.weekday()]} {d.day} de {MESES[d.month - 1]}"
+
+
+def _fecha_corta(d) -> str:
+    return d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
+
+
+def _ofertas(n: int) -> str:
+    return f"{_n(n)} oferta" + ("" if n == 1 else "s")
+
+
+def _mas_menos(delta: int) -> str:
+    return f"{_n(abs(delta))} " + ("más" if delta > 0 else "menos")
+
+
+def _comparacion(total: int, d1: int | None, d7: int | None) -> str:
+    if d1 is None and d7 is None:
+        return "Es el primer día con datos, aún no hay con qué comparar."
+    partes = []
+    if d1 is not None:
+        if d1 == 0:
+            partes.append("igual que ayer")
+        else:
+            txt = f"{_mas_menos(d1)} que ayer"
+            if total - d1 > 0:
+                txt += f" ({_pct(d1 / (total - d1) * 100)})"
+            partes.append(txt)
+    if d7 is not None:
+        partes.append("igual que hace una semana" if d7 == 0 else f"{_mas_menos(d7)} que hace una semana")
+    primero = partes[0]
+    if d1 is not None and d1 != 0:
+        verbo = "Es" if abs(d1) == 1 else "Son"
+    elif d1 is None and d7 != 0:
+        verbo = "Es" if abs(d7) == 1 else "Son"
+    else:
+        verbo = "Es"
+    return f"{verbo} {primero}" + (f" y {partes[1]}" if len(partes) > 1 else "") + "."
+
+
 def formatear(filas, entorno: str, hoy_utc: date | datetime) -> str:
     """Texto plano (sin parse_mode), siempre < 4096 caracteres."""
     hoy = hoy_utc.date() if isinstance(hoy_utc, datetime) else hoy_utc
-    pref = "[dev] " if entorno == "dev" else ""
-    cab = f"{pref}Mercado {hoy.isoformat()}"
+    titulo = ("🧪 [dev] " if entorno == "dev" else "📊 ") + "Mercado laboral en Catalunya"
+    cab = f"{titulo}\n{_fecha_larga(hoy)}"
     filas = list(filas)
     if not filas:
-        return f"{cab}\nsin datos"
-    lineas = [cab]
-    for f in filas:
-        marca = "" if f.dia == hoy else f" (sin datos de hoy, último: {_fecha(f.dia)})"
-        lineas += [
-            f"{f.portal}{marca}",
-            f"  activas: {f.n_vistas} (Δ1d {_d(f.d_vistas_1d)}, Δ7d {_d(f.d_vistas_7d)})",
-            f"  nuevas: {f.n_nuevas} · desaparecidas: {'—' if f.n_desaparecidas is None else f.n_desaparecidas}",
-            f"  únicos: {f.n_unicas} (Δ1d {_d(f.d_unicas_1d)}, Δ7d {_d(f.d_unicas_7d)})",
-        ]
+        return f"{cab}\n\nHoy no hay datos todavía."
     de_hoy = [f for f in filas if f.dia == hoy]
-    lineas.append(f"Total hoy ({len(de_hoy)} portales): activas {sum(f.n_vistas for f in de_hoy)}, "
-                  f"nuevas {sum(f.n_nuevas for f in de_hoy)}, únicos {sum(f.n_unicas for f in de_hoy)}")
+    bloques = [cab]
+    if de_hoy:
+        total = sum(f.n_vistas for f in de_hoy)
+        unicas = sum(f.n_unicas for f in de_hoy)
+        d1 = sum(f.d_vistas_1d for f in de_hoy) if all(f.d_vistas_1d is not None for f in de_hoy) else None
+        d7 = sum(f.d_vistas_7d for f in de_hoy) if all(f.d_vistas_7d is not None for f in de_hoy) else None
+        act = "Hoy hay 1 oferta activa" if total == 1 else f"Hoy hay {_n(total)} ofertas activas"
+        uni = "1 puesto distinto" if unicas == 1 else f"{_n(unicas)} puestos distintos"
+        bloques.append(f"{act} ({uni}).\n{_comparacion(total, d1, d7)}")
+        nuevas = sum(f.n_nuevas for f in de_hoy)
+        ent = ("Ha entrado 1 oferta nueva" if nuevas == 1 else f"Han entrado {_n(nuevas)} ofertas nuevas")
+        if all(f.n_desaparecidas is not None for f in de_hoy):
+            desap = sum(f.n_desaparecidas for f in de_hoy)
+            ent += " y ha desaparecido 1" if desap == 1 else f" y han desaparecido {_n(desap)}"
+        bloques.append(ent + ".")
+    else:
+        bloques.append("Hoy no hay datos todavía.")
+    lin = ["Por portal:"]
+    for f in sorted(filas, key=lambda f: (f.dia != hoy, -f.n_vistas, f.portal)):
+        nombre = NOMBRES.get(f.portal, f.portal)
+        if f.dia != hoy:
+            lin.append(f"• {nombre}: sin datos de hoy (último: {_fecha_corta(f.dia)}).")
+            continue
+        t = f"• {nombre}: {_ofertas(f.n_vistas)}"
+        if f.d_vistas_1d is not None:
+            t += f" ({f.d_vistas_1d:+d} vs ayer)"
+        t += f". {_n(f.n_nuevas)} " + ("nueva" if f.n_nuevas == 1 else "nuevas")
+        if f.n_desaparecidas is not None:
+            t += f", {_n(f.n_desaparecidas)} " + ("retirada" if f.n_desaparecidas == 1 else "retiradas")
+        lin.append(t + ".")
+    bloques.append("\n".join(lin))
     feina = [f for f in filas if f.portal == FUENTE_FEINA]
     if feina:
-        lineas.append(f"Fuente Feina Activa: Generalitat de Catalunya (datos del {_fecha(feina[0].dia)})")
-    return "\n".join(lineas)[:MAX_CARACTERES]
+        bloques.append(f"Fuente: Feina Activa (Generalitat de Catalunya), datos del {_fecha_corta(feina[0].dia)}.")
+    return "\n\n".join(bloques)[:MAX_CARACTERES]
 
 
 def http_telegram(url: str, datos: dict):
