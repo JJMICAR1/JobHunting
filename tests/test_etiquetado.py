@@ -78,6 +78,10 @@ def n(conn, tabla):
     return conn.execute(f"SELECT count(*) FROM {tabla}").fetchone()[0]
 
 
+def na(conn, tipo="etiquetado"):
+    return conn.execute("SELECT count(*) FROM avisos WHERE tipo = %s", (tipo,)).fetchone()[0]
+
+
 def cfg(conn, clave):
     return E.leer_config(conn, clave, "AUSENTE")
 
@@ -224,8 +228,7 @@ def test_envio_basico_y_una_vez_al_dia(bd):
     http = FakeTG()
     assert enviar(bd, http) == 10
     assert len(http.ofertas()) == 10 and len(http.intros()) == 1 and n(bd, "envios_etiquetado") == 10
-    assert n(bd, "avisos") == 1
-    assert bd.execute("SELECT tipo FROM avisos").fetchone()[0] == "etiquetado"
+    assert na(bd) == 1 and na(bd, "etiquetado_intro") == 1
     assert bd.execute("SELECT count(*) FROM envios_etiquetado WHERE message_id IS NULL").fetchone()[0] == 0
     for d in http.ofertas():
         assert d["chat_id"] == CHAT and d["disable_web_page_preview"] is True
@@ -233,7 +236,7 @@ def test_envio_basico_y_una_vez_al_dia(bd):
     # segunda ejecucion el mismo dia: nada
     http2 = FakeTG()
     assert enviar(bd, http2) == 0 and http2.calls == []
-    assert n(bd, "envios_etiquetado") == 10 and n(bd, "avisos") == 1
+    assert n(bd, "envios_etiquetado") == 10 and na(bd) == 1
     # a otra hora del mismo dia, tambien
     assert enviar(bd, http2, ahora=utc(2026, 11, 4, 22, 0)) == 0 and http2.calls == []
 
@@ -266,7 +269,7 @@ def test_registrar_envio_duplicado_devuelve_none(bd):
 def test_sin_ofertas_de_hoy_no_envia(bd, capsys):
     poner_ofertas(bd, [of(i) for i in range(5)], utc(2026, 11, 3, 9, 0))   # ayer
     http = FakeTG()
-    assert enviar(bd, http) == 0 and http.calls == [] and n(bd, "avisos") == 0
+    assert enviar(bd, http) == 0 and http.calls == [] and na(bd) == 0
     assert "sin ofertas" in capsys.readouterr().out
 
 
@@ -301,12 +304,12 @@ def test_lote_cortado_a_medias_se_reanuda_sin_duplicar(bd):
     http.fallo_en[("sendMessage", 5)] = 500   # 1 = intro, 2-4 = ofertas, 5 = 4a oferta
     with pytest.raises(RuntimeError):
         enviar(bd, http)
-    assert n(bd, "envios_etiquetado") == 3 and n(bd, "avisos") == 0     # la reserva fallida se deshace
+    assert n(bd, "envios_etiquetado") == 3 and na(bd) == 0     # la reserva fallida se deshace
     ya = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()}
     http2 = FakeTG()
     assert enviar(bd, http2) == 7
     assert len(http2.ofertas()) == 7 and http2.intros() == []   # la intro no se repite al reanudar
-    assert n(bd, "envios_etiquetado") == 10 and n(bd, "avisos") == 1
+    assert n(bd, "envios_etiquetado") == 10 and na(bd) == 1
     nuevos = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()} - ya
     assert len(nuevos) == 7
     assert enviar(bd, FakeTG()) == 0
@@ -319,14 +322,14 @@ def test_429_al_enviar_para_sin_reintentos(bd):
     with pytest.raises(tg.LimiteTelegram):
         enviar(bd, http)
     assert len(http.de("sendMessage")) == 4          # intro + 3 intentos: ni un reintento ni mas envios
-    assert n(bd, "envios_etiquetado") == 2 and n(bd, "avisos") == 0
+    assert n(bd, "envios_etiquetado") == 2 and na(bd) == 0
 
 
 def test_dry_run_en_enviar_lote_no_escribe_ni_llama(bd, capsys):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
     assert enviar(bd, http, dry=True) == 10
-    assert http.calls == [] and n(bd, "envios_etiquetado") == 0 and n(bd, "avisos") == 0
+    assert http.calls == [] and n(bd, "envios_etiquetado") == 0 and na(bd) == 0
     out = capsys.readouterr().out
     assert "(sin enviar)" in out and TOKEN not in out and CHAT not in out
 
@@ -779,8 +782,8 @@ def test_ver_en_prod_calcula_y_guarda_auto_y_progreso_primero(bd):
     assert "python" in cfg(bd, "reglas_auto")["si"]
 
 
-@pytest.mark.xfail(strict=True, reason="reglas.py _ver: `a = p.get('auto')` es un dict con 4 listas vacias (truthy), "
-                   "asi que /ver con <10 etiquetas imprime 'Aprendido de tus Sí/No: ' vacio en vez de 'nada todavía'")
+@pytest.mark.xfail(strict=True, reason="reglas.py:159-160 _ver: `if a:` con dict de 4 listas vacias es truthy; "
+                   "falta el any(a.values()) en el commit")
 def test_ver_sin_etiquetas_suficientes_dice_nada_todavia(bd):
     http = FakeTG([msg(1, "/ver")])
     recoger(bd, http)
@@ -846,8 +849,6 @@ def test_manual_manda_sobre_auto_en_la_nota(bd):
     assert notas and all("-python" in t for t in notas)      # manual "no" python; el auto "si" no entra
 
 
-@pytest.mark.xfail(strict=True, reason="enviar_lote: pendientes == lote se cumple tambien si la 1a oferta falla "
-                   "(se borra la reserva) y la intro ya salio: al reanudar se envia otra intro")
 def test_intro_no_se_repite_si_falla_la_primera_oferta(bd):
     poner_ofertas(bd, [of(i) for i in range(12)])
     http = FakeTG()
