@@ -383,11 +383,26 @@ def test_callback_otro_chat_o_otro_entorno_se_ignora(bd):
 
 def test_callback_de_envio_desconocido_no_rompe(bd):
     preparar_envios(bd)
-    http = FakeTG([clic(10, "p:s:99999999999999999999")])
+    http = FakeTG([clic(10, "p:s:999999")])
     recoger(bd, http)
     assert n(bd, "etiquetas") == 0
     assert http.de("answerCallbackQuery")[0]["text"] == "Oferta desconocida" and http.de("editMessageText") == []
     assert cfg(bd, "telegram_offset") == 11
+
+
+@pytest.mark.parametrize("data", ["p:s:" + "9" * 19, "p:s:99999999999999999999", "p:s:²", "p:n:١٢٣"])
+def test_callback_con_id_no_valido_se_ignora_y_el_offset_avanza(bd, data):
+    ids = preparar_envios(bd)
+    http = FakeTG([clic(10, data), clic(11, f"p:s:{ids[0]}")])
+    recoger(bd, http)
+    assert len(http.de("answerCallbackQuery")) == 1       # solo el valido
+    assert etiquetas(bd) == [("rf-0", True)] and cfg(bd, "telegram_offset") == 12
+
+
+def test_parsear_callback_limite_18_cifras():
+    assert E.parsear_callback("p:s:" + "9" * 18, "prod") == (True, int("9" * 18))
+    assert E.parsear_callback("p:s:" + "9" * 19, "prod") is None
+    assert E.parsear_callback("p:s:²", "prod") is None
 
 
 def test_fallo_cosmetico_no_impide_guardar(bd, capsys):
@@ -455,14 +470,17 @@ def test_offset_si_falla_el_primer_update_no_se_guarda(bd):
     assert cfg(bd, "telegram_offset") == 10
 
 
-def test_offset_con_error_de_bd_a_mitad_no_salta_el_update_fallido(bd):
-    """Un RuntimeError en un comando (reglas corruptas) deja el offset en el ultimo update bueno + 1."""
+def test_reglas_invalidas_no_bloquean_el_offset(bd):
+    """Un comando con config.reglas invalida se responde y se da por consumido: no lanza y el offset avanza."""
     ids = preparar_envios(bd)
     http = FakeTG([clic(20, f"p:s:{ids[0]}"), msg(21, "/si python"), clic(22, f"p:s:{ids[1]}")])
     E.guardar_config(bd, "reglas", {"raro": 1}, AHORA)
-    with pytest.raises(RuntimeError):
-        recoger(bd, http)
-    assert cfg(bd, "telegram_offset") == 21 and etiquetas(bd) == [("rf-0", True)]
+    recoger(bd, http)
+    assert cfg(bd, "telegram_offset") == 23
+    assert dict(etiquetas(bd)) == {"rf-0": True, "rf-1": True}
+    assert cfg(bd, "reglas") == {"raro": 1}
+    resp = http.de("sendMessage")
+    assert len(resp) == 1 and resp[0]["text"].startswith("Las reglas guardadas tienen un formato no válido")
 
 
 def test_getupdates_falla_no_toca_offset(bd):
@@ -667,3 +685,27 @@ def test_telegram_errores_sin_token():
 def test_mercado_sigue_reexportando_http_telegram():
     from jobhunting import mercado
     assert mercado.http_telegram is tg.http_telegram
+
+
+def test_main_hace_strip_de_token_y_chat(conn, db_url, monkeypatch):
+    db.migrar(conn)
+    poner_ofertas(conn, [of(i) for i in range(3)])
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN + "\n")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", CHAT + "\n")
+    http = FakeTG([msg(5, "/ver")])
+    assert E.main(["--entorno", "prod"], ahora=AHORA, http=http) == 0
+    env = http.de("sendMessage")
+    assert len(env) == 1 + 3 and all(d["chat_id"] == CHAT for d in env)   # el comando del chat se obedece
+    assert cfg(conn, "telegram_offset") == 6
+
+
+def test_respuesta_a_comandos_se_recorta_a_4000(bd):
+    r = {"si": [f"termino{i:03d}" + "x" * 40 for i in range(200)], "no": [f"n{i}" + "y" * 40 for i in range(200)],
+         "ciudades": [], "modalidades": []}
+    E.guardar_config(bd, "reglas", r, AHORA)
+    assert len(R.aplicar_comando(R.Reglas.desde_dict(r), "/ver")[1]) > 4000
+    http = FakeTG([msg(1, "/ver")])
+    recoger(bd, http)
+    t = http.de("sendMessage")[0]["text"]
+    assert len(t) == E.MAX_TEXTO == 4000
