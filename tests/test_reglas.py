@@ -190,3 +190,125 @@ def test_desde_dict_valida():
                  {"modalidades": ["lunar"]}, {"si": [f"t{i}" for i in range(201)]}):
         with pytest.raises(ValueError):
             Reglas.desde_dict(malo)
+
+
+# --- reglas aprendidas ---
+
+def et(titulo, v, ciudad=None, modalidad=None):
+    return {"titulo": titulo, "empresa": "X", "ciudad": ciudad, "modalidad": modalidad, "etiqueta": v}
+
+
+def relleno(k=5):
+    """k etiquetas neutras que no generan terminos con evidencia."""
+    return [et(f"Relleno{i} unico{i}", i % 2 == 0) for i in range(k)]
+
+
+def test_aprender_menos_de_10_etiquetas_es_vacia():
+    assert R.aprender([et("Python dev", True)] * 9) == Reglas()
+    assert R.aprender([]) == Reglas()
+    assert R.aprender([et("Python dev", True)] * 10).si != ()
+
+
+def test_aprender_umbrales_con_suavizado():
+    # n=3: 3 si -> 4/5=0.8 (si); 2 si -> 3/5=0.6 (nada); 0 si -> 1/5=0.2 (no, limite inclusivo)
+    datos = ([et("alfa", True)] * 3 + [et("beta", True)] * 2 + [et("beta", False)] +
+             [et("gamma", False)] * 3 + relleno(1) * 3)
+    r = R.aprender(datos)
+    assert "alfa" in r.si and "gamma" in r.no
+    assert "beta" not in r.si + r.no
+    # limite 0,7: n=10, 8 si = 9/12 = 0.75 si; 7 si = 8/12 no
+    d = [et("delta", True)] * 8 + [et("delta", False)] * 2
+    assert "delta" in R.aprender(d).si
+    d = [et("delta", True)] * 7 + [et("delta", False)] * 3
+    assert "delta" not in R.aprender(d).si
+
+
+def test_aprender_min_apariciones_3():
+    datos = [et("raro", True)] * 2 + relleno(8)
+    assert "raro" not in R.aprender(datos).si
+    datos = [et("raro", True)] * 3 + relleno(7)
+    assert "raro" in R.aprender(datos).si
+
+
+def test_aprender_stopwords_y_palabras_cortas():
+    datos = [et("de la per amb con ab Python", True)] * 10
+    r = R.aprender(datos)
+    for t in ("de", "la", "per", "amb", "con", "ab"):
+        assert t not in r.si
+    assert "python" in r.si
+    assert not any(t.split()[0] in R.STOPWORDS or len(t.split()[0]) < 3 for t in r.si)
+
+
+def test_aprender_bigramas_contiguos():
+    r = R.aprender([et("Senior Python Developer", True)] * 10)
+    assert "senior python" in r.si and "python developer" in r.si
+    assert "senior developer" not in r.si          # no contiguo
+    # una stopword rompe la contiguidad: "ingeniero de datos" no da "ingeniero datos"
+    r = R.aprender([et("Ingeniero de datos", True)] * 10)
+    assert "ingeniero datos" not in r.si and "ingeniero" in r.si and "datos" in r.si
+
+
+def test_aprender_tope_30_y_orden_determinista():
+    datos = []
+    for i in range(40):
+        datos += [et(f"term{i:02d}", True)] * 3
+    r = R.aprender(datos)
+    assert len(r.si) == 30
+    assert r.si == tuple(sorted(r.si)) and r.si[0] == "term00"         # empate de evidencia: alfabetico
+    assert R.aprender(list(reversed(datos))) == r
+    # mas evidencia primero
+    r2 = R.aprender(datos + [et("zzzz", True)] * 6)
+    assert r2.si[0] == "zzzz"
+
+
+def test_aprender_ciudades_y_modalidades_solo_positivas():
+    datos = ([et("a1", True, "Girona", "remoto")] * 4 + [et("b1", False, "Lleida", "presencial")] * 4 +
+             [et("c1", True, "Girona", "remoto")] * 2)
+    r = R.aprender(datos)
+    assert r.ciudades == ("girona",) and r.modalidades == ("remoto",)      # Lleida/presencial negativos: no van
+
+
+def test_aprender_modalidad_invalida_se_ignora():
+    r = R.aprender([et("x", True, None, "lunar")] * 10)
+    assert r.modalidades == ()
+
+
+def test_aprender_ignorar_excluye():
+    datos = [et("Python dev", True, "Girona")] * 10
+    r = R.aprender(datos, ("Python", "girona"))
+    assert "python" not in r.si and "python dev" in r.si and r.ciudades == ()
+
+
+def test_aprender_resultado_valido_y_limite_de_termino():
+    r = R.aprender([et("palabra " * 3, True)] * 10)
+    assert Reglas.desde_dict(r.a_dict()) == r
+
+
+def test_combinar_manual_manda():
+    man = Reglas(si=("a",), no=("b",), ignorar=("z",))
+    auto = Reglas(si=("b", "c", "a"), no=("a", "d"), ciudades=("girona",), modalidades=("remoto",))
+    c = R.combinar(man, auto)
+    assert c.si == ("a", "c") and c.no == ("b", "d")
+    assert c.ciudades == ("girona",) and c.modalidades == ("remoto",) and c.ignorar == ("z",)
+    assert R.combinar(Reglas(), Reglas()).vacia()
+
+
+def test_olvidar_y_quitar_ignorar():
+    r, m = cmd(Reglas(), "/olvidar Python")
+    assert r.ignorar == ("python",) and "Olvidado" in m
+    assert cmd(r, "/olvidar python")[0] == r and cmd(r, "/olvidar python")[1].startswith("Ya estaba")
+    assert r.vacia()                       # ignorar no puntua
+    assert cmd(r, "/olvidar")[1].startswith("Uso")
+    assert cmd(r, "/olvidar " + "a" * 61)[0] == r
+    q, m = cmd(r, "/quitar python")
+    assert q.ignorar == () and m == "Quitado: python"
+    assert "ignorar" in r.a_dict() and "ignorar" not in q.a_dict()
+    assert Reglas.desde_dict(r.a_dict()) == r
+
+
+def test_ver_progreso_primero_e_ignorados():
+    r = Reglas(si=("a",), ignorar=("z",))
+    t = cmd(r, "/ver", {"total": 1, "si": 1, "no": 0, "meta": 100,
+                        "auto": {"si": ["python"], "no": [], "ciudades": [], "modalidades": []}})[1]
+    assert t.splitlines()[0].startswith("Progreso: 1/100") and "Ignorados: z" in t
+    assert "Aprendido de tus Sí/No: Sí: python" in t

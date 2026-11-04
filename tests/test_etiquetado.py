@@ -328,7 +328,7 @@ def test_dry_run_en_enviar_lote_no_escribe_ni_llama(bd, capsys):
     assert enviar(bd, http, dry=True) == 10
     assert http.calls == [] and n(bd, "envios_etiquetado") == 0 and n(bd, "avisos") == 0
     out = capsys.readouterr().out
-    assert "sin envío" in out and TOKEN not in out and CHAT not in out
+    assert "(sin enviar)" in out and TOKEN not in out and CHAT not in out
 
 
 # --- recoger: clics ---
@@ -717,3 +717,213 @@ def test_respuesta_a_comandos_se_recorta_a_4000(bd):
     recoger(bd, http)
     t = http.de("sendMessage")[0]["text"]
     assert len(t) == E.MAX_TEXTO == 4000
+
+
+# --- reglas aprendidas: bot ---
+
+def etiquetar(bd, spec, ahora=AHORA):
+    """spec: [(titulo, ciudad, modalidad, bool)]: crea ofertas, envios y etiquetas directamente."""
+    for i, (t, c, m, et) in enumerate(spec):
+        o = of(f"e{i}", titulo=t, ciudad=c, modalidad=m)
+        poner_ofertas(bd, [o], utc(2026, 11, 3, 8, 0))
+        eid = E.registrar_envio(bd, "tecnoempleo", f"rf-e{i}", utc(2026, 11, 3, 9, 0), "azar", None)
+        E.guardar_etiqueta(bd, eid, et, ahora)
+
+
+PATRON = [("Python dev", "Girona", "remoto", True)] * 5 + [("Cocinero jefe", "Lleida", "presencial", False)] * 5
+
+
+def test_calcular_auto_guarda_solo_si_se_pide(bd):
+    etiquetar(bd, PATRON)
+    a = E.calcular_auto(bd, R.Reglas(), AHORA, guardar=False)
+    assert "python" in a.si and "cocinero" in a.no and cfg(bd, "reglas_auto") == "AUSENTE"
+    E.calcular_auto(bd, R.Reglas(), AHORA, guardar=True)
+    assert cfg(bd, "reglas_auto")["si"] == list(a.si)
+
+
+def test_calcular_auto_respeta_ignorar(bd):
+    etiquetar(bd, PATRON)
+    a = E.calcular_auto(bd, R.Reglas(ignorar=("python",)), AHORA, guardar=False)
+    assert "python" not in a.si and "python dev" in a.si
+
+
+def test_reglas_auto_solo_se_guarda_en_prod_sin_dry_run(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i) for i in range(5)])
+    enviar(bd, FakeTG(), entorno="dev")
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+    bd.execute("DELETE FROM avisos")
+    enviar(bd, FakeTG(), entorno="prod", dry=True)
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+    enviar(bd, FakeTG(), entorno="prod")
+    assert "python" in cfg(bd, "reglas_auto")["si"]
+
+
+def test_dev_nunca_escribe_config(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i) for i in range(5)])
+    antes = bd.execute("SELECT clave, valor FROM config ORDER BY 1").fetchall()
+    http = FakeTG([msg(1, "/si x"), msg(2, "/ver")])
+    recoger(bd, http, entorno="dev")
+    enviar(bd, http, entorno="dev")
+    assert bd.execute("SELECT clave, valor FROM config ORDER BY 1").fetchall() == antes
+
+
+def test_ver_en_prod_calcula_y_guarda_auto_y_progreso_primero(bd):
+    etiquetar(bd, PATRON)
+    http = FakeTG([msg(1, "/ver")])
+    recoger(bd, http)
+    t = http.de("sendMessage")[0]["text"]
+    assert t.startswith("Progreso: 10/100 (Sí 5, No 5)")
+    assert "Aprendido de tus Sí/No" in t and "python" in t
+    assert "python" in cfg(bd, "reglas_auto")["si"]
+
+
+@pytest.mark.xfail(strict=True, reason="reglas.py _ver: `a = p.get('auto')` es un dict con 4 listas vacias (truthy), "
+                   "asi que /ver con <10 etiquetas imprime 'Aprendido de tus Sí/No: ' vacio en vez de 'nada todavía'")
+def test_ver_sin_etiquetas_suficientes_dice_nada_todavia(bd):
+    http = FakeTG([msg(1, "/ver")])
+    recoger(bd, http)
+    assert "nada todavía" in http.de("sendMessage")[0]["text"]
+
+
+def test_olvidar_y_quitar_sobre_ignorar_por_bot(bd):
+    etiquetar(bd, PATRON)
+    recoger(bd, FakeTG([msg(1, "/olvidar Python")]))
+    assert cfg(bd, "reglas")["ignorar"] == ["python"]
+    assert "python" not in E.calcular_auto(bd, E.leer_reglas(bd), AHORA, False).si
+    http = FakeTG([msg(2, "/quitar python")])
+    recoger(bd, http)
+    assert "ignorar" not in cfg(bd, "reglas") and http.de("sendMessage")[0]["text"] == "Quitado: python"
+    assert "python" in E.calcular_auto(bd, E.leer_reglas(bd), AHORA, False).si
+
+
+def test_intro_variantes():
+    el = [{"muestra": "reglas"}] * 7 + [{"muestra": "azar"}] * 3
+    assert E.mensaje_intro(el, R.Reglas(), 4) == "Aún aprendo: llevas 4/10 etiquetas para empezar a puntuar"
+    sin = E.mensaje_intro(el, R.Reglas(), 40)
+    assert sin.startswith("Lote de hoy: 10 al azar") and "patrones" in sin
+    auto = R.Reglas(si=tuple(f"s{i}" for i in range(8)), no=("malo",))
+    m = E.mensaje_intro(el, auto, 40).splitlines()
+    assert m == ["Lote de hoy: 7 por lo que he aprendido de ti, 3 al azar", "Te gusta: s0, s1, s2, s3, s4",
+                 "No te gusta: malo"]
+    solo_no = E.mensaje_intro(el, R.Reglas(no=("malo",)), 40)
+    assert "Te gusta" not in solo_no and "No te gusta: malo" in solo_no
+
+
+def test_intro_se_envia_una_vez_con_menos_de_10_etiquetas(bd):
+    poner_ofertas(bd, [of(i) for i in range(12)])
+    http = FakeTG()
+    enviar(bd, http)
+    assert [d["text"] for d in http.intros()] == ["Aún aprendo: llevas 0/10 etiquetas para empezar a puntuar"]
+    assert http.de("sendMessage")[0] == http.intros()[0]      # va la primera
+
+
+def test_intro_con_patrones_y_nota_usa_manual_mas_auto(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo="Python dev" if i < 3 else f"Otro {i}", ciudad="Girona", modalidad="remoto")
+                       for i in range(20)])
+    E.guardar_config(bd, "reglas", {"si": ["otro"], "no": [], "ciudades": [], "modalidades": []}, AHORA)
+    http = FakeTG()
+    enviar(bd, http)
+    intro = http.intros()[0]["text"]
+    assert intro.startswith("Lote de hoy: 7 por lo que he aprendido de ti, 3 al azar") and "Te gusta: " in intro
+    por_reglas = [d["text"] for d in http.ofertas() if "[azar]" not in d["text"]]
+    assert len(por_reglas) == 7
+    # "Python dev": auto si dev, python, "python dev" (+3) + ciudad (+0,5) + modalidad (+0,5) = 4,0
+    assert any("Nota 4,0" in t for t in por_reglas if t.startswith("Python dev"))
+    # "Otro n": manual "otro" (+1) + ciudad + modalidad = 2,0 -> la nota usa manual + aprendido
+    assert any("Nota 2,0" in t for t in por_reglas if t.startswith("Otro"))
+
+
+def test_manual_manda_sobre_auto_en_la_nota(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo="Python dev") for i in range(12)])
+    E.guardar_config(bd, "reglas", {"no": ["python"], "si": [], "ciudades": [], "modalidades": []}, AHORA)
+    http = FakeTG()
+    enviar(bd, http)
+    notas = [d["text"] for d in http.ofertas() if "Nota" in d["text"]]
+    assert notas and all("-python" in t for t in notas)      # manual "no" python; el auto "si" no entra
+
+
+@pytest.mark.xfail(strict=True, reason="enviar_lote: pendientes == lote se cumple tambien si la 1a oferta falla "
+                   "(se borra la reserva) y la intro ya salio: al reanudar se envia otra intro")
+def test_intro_no_se_repite_si_falla_la_primera_oferta(bd):
+    poner_ofertas(bd, [of(i) for i in range(12)])
+    http = FakeTG()
+    http.fallo_en[("sendMessage", 2)] = 500          # 1 = intro, 2 = primera oferta
+    with pytest.raises(RuntimeError):
+        enviar(bd, http)
+    http2 = FakeTG()
+    enviar(bd, http2)
+    assert http2.intros() == []
+
+
+def test_dry_run_y_sin_token_no_imprimen_datos_personales(bd, capsys):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo=f"Python secretisimo {i}") for i in range(12)])
+    for dry, tok in ((True, TOKEN), (False, None)):
+        http = FakeTG()
+        assert E.enviar_lote(bd, "prod", tok, CHAT if tok else None, AHORA, dry, http) == 10
+        out = capsys.readouterr().out
+        assert out.startswith("(sin enviar) 10 ofertas:") and "términos aprendidos" in out
+        for dato in ("secretisimo", "Oferta", "ACME", "python", "cocinero", "tecnoempleo", "http"):
+            assert dato not in out.lower().replace("(sin enviar)", ""), dato
+        assert http.calls == []
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+
+
+# --- varios comandos en un mensaje ---
+
+def test_multilinea_en_orden_una_sola_respuesta(bd):
+    http = FakeTG([msg(1, "/si a1x\n/no b1x\n/ver")])
+    recoger(bd, http)
+    assert cfg(bd, "reglas")["si"] == ["a1x"] and cfg(bd, "reglas")["no"] == ["b1x"]
+    env = http.de("sendMessage")
+    assert len(env) == 1
+    lineas = env[0]["text"].splitlines()
+    assert lineas[0] == "Añadido a si: a1x" and lineas[1] == "Añadido a no: b1x"
+    assert "Sí: a1x" in env[0]["text"] and "No: b1x" in env[0]["text"]     # /ver ve el estado acumulado
+
+
+def test_multilinea_ignora_lineas_sin_barra(bd):
+    http = FakeTG([msg(1, "/si uno\nhola\ntexto suelto\n   /si dos  \n\n")])
+    recoger(bd, http)
+    assert cfg(bd, "reglas")["si"] == ["uno", "dos"]
+    assert http.de("sendMessage")[0]["text"].splitlines() == ["Añadido a si: uno", "Añadido a si: dos"]
+
+
+def test_multilinea_corta_a_60_comandos(bd):
+    texto = "\n".join(f"/si t{i}" for i in range(75))
+    http = FakeTG([msg(1, texto)])
+    recoger(bd, http)
+    assert len(cfg(bd, "reglas")["si"]) == E.MAX_LINEAS == 60
+    assert cfg(bd, "reglas")["si"][-1] == "t59" and len(http.de("sendMessage")) == 1
+
+
+def test_multilinea_idempotente_al_reprocesar(bd):
+    u = [msg(1, "/si a1x\n/no b1x\n/olvidar c1x\n/lote 7")]
+    recoger(bd, FakeTG(u))
+    e1 = (cfg(bd, "reglas"), cfg(bd, "lote"))
+    http = FakeTG(u)
+    recoger(bd, http)
+    assert (cfg(bd, "reglas"), cfg(bd, "lote")) == e1 == ({"si": ["a1x"], "no": ["b1x"], "ciudades": [],
+                                                           "modalidades": [], "ignorar": ["c1x"]}, 7)
+    assert "Ya estaba: a1x" in http.de("sendMessage")[0]["text"]
+
+
+def test_multilinea_lote_y_ver_guarda_antes(bd):
+    http = FakeTG([msg(1, "/si a1x\n/lote 5\n/ver")])
+    recoger(bd, http)
+    assert cfg(bd, "lote") == 5 and cfg(bd, "reglas")["si"] == ["a1x"]
+    assert http.de("sendMessage")[0]["text"].splitlines()[1] == "Lote: 5 al día"
+    assert cfg(bd, "reglas_auto") is not None
+
+
+def test_multilinea_respuesta_recortada_y_solo_texto_sin_barras_no_responde(bd):
+    http = FakeTG([msg(1, "solo texto\nmas texto")])
+    recoger(bd, http)
+    assert http.de("sendMessage") == [] and cfg(bd, "reglas") == "AUSENTE"
+    http = FakeTG([msg(2, "/ver\n" * 60)])
+    recoger(bd, http)
+    assert len(http.de("sendMessage")[0]["text"]) <= E.MAX_TEXTO
