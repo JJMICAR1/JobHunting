@@ -154,8 +154,6 @@ def test_un_patch_falla_sale_1_pero_intenta_el_otro():
     assert sorted(f.escrituras()) == [("PATCH", "/jobs/11"), ("PATCH", "/jobs/22")]
 
 
-@pytest.mark.xfail(strict=True, reason="configurar_cronjob.py:configurar: un RuntimeError de red en el 1er PUT "
-                   "propaga y no se intenta la 2a tarea (solo los status HTTP de error siguen adelante)")
 def test_error_de_red_en_una_tarea_no_impide_la_otra():
     f = Falso(excepciones={("PUT", "/jobs"): RuntimeError("fallo de red")})
     try:
