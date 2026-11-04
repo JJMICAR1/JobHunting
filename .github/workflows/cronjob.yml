@@ -2,7 +2,7 @@ name: cronjob
 
 # Plan B del cron (CEO, 2026-11-04): GitHub no dispara los `schedule` de este repo.
 # Crea o actualiza en cron-job.org las tareas que lanzan etiquetado (cada hora) y pipeline (diario) en prod.
-# Idempotente. Solo a mano o al cambiar este archivo en una rama claude/. No imprime secretos.
+# Idempotente (repetir tras rotar el token). Solo a mano o al cambiar este archivo en una rama claude/. No imprime secretos.
 on:
   workflow_dispatch:
   push:
