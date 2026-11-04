@@ -16,6 +16,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from jobhunting import reglas as R
 from jobhunting import telegram as tg
 
+TIPO_INTRO = "etiquetado_intro"
 TIPO_AVISO = "etiquetado"
 LOTE_DEFECTO = 10
 FRACCION_REGLAS = 0.7
@@ -138,13 +139,13 @@ def progreso(conn) -> dict:
     return {"total": t, "si": si, "no": t - si, "meta": R.META, "lote": leer_lote(conn)}
 
 
-def aviso_hecho(conn, dia: date) -> bool:
-    return conn.execute("SELECT 1 FROM avisos WHERE dia = %s AND tipo = %s", (dia, TIPO_AVISO)).fetchone() is not None
+def aviso_hecho(conn, dia: date, tipo: str = TIPO_AVISO) -> bool:
+    return conn.execute("SELECT 1 FROM avisos WHERE dia = %s AND tipo = %s", (dia, tipo)).fetchone() is not None
 
 
-def registrar_aviso(conn, dia: date, ahora: datetime) -> None:
+def registrar_aviso(conn, dia: date, ahora: datetime, tipo: str = TIPO_AVISO) -> None:
     conn.execute("INSERT INTO avisos (dia, tipo, enviado) VALUES (%s, %s, %s) ON CONFLICT (dia, tipo) DO NOTHING",
-                 (dia, TIPO_AVISO, ahora))
+                 (dia, tipo, ahora))
 
 
 # --- seleccion y formato (puros) ---
@@ -336,8 +337,9 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
         return 0
     enviadas = 0
     intro = mensaje_intro(elegidas, auto, conn.execute("SELECT count(*) FROM etiquetas").fetchone()[0])
-    if real and pendientes == lote:   # no se repite si se reanuda un lote cortado
+    if real and not aviso_hecho(conn, dia, TIPO_INTRO):   # una intro al dia, aunque el lote se reanude
         _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": intro}, http)
+        registrar_aviso(conn, dia, ahora, TIPO_INTRO)
     elif not real:
         # Log publico: solo contadores (ni ofertas elegidas ni terminos aprendidos, que son datos personales).
         n_reglas = sum(1 for c in elegidas if c["muestra"] == "reglas")
