@@ -44,6 +44,14 @@ class FakeTG:
             return 200, {"ok": True, "result": {"message_id": self.msg_id}}
         return 200, {"ok": True, "result": True}
 
+    def ofertas(self):
+        """sendMessage de ofertas (llevan botones); excluye intro y respuestas a comandos."""
+        return [d for d in self.de("sendMessage") if "reply_markup" in d]
+
+    def intros(self):
+        return [d for d in self.de("sendMessage")
+                if "reply_markup" not in d and d["text"].startswith(("Lote de hoy", "Aún aprendo"))]
+
     def de(self, metodo):
         return [d for m, d in self.calls if m == metodo]
 
@@ -215,11 +223,11 @@ def test_envio_basico_y_una_vez_al_dia(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
     assert enviar(bd, http) == 10
-    assert len(http.de("sendMessage")) == 10 and n(bd, "envios_etiquetado") == 10
+    assert len(http.ofertas()) == 10 and len(http.intros()) == 1 and n(bd, "envios_etiquetado") == 10
     assert n(bd, "avisos") == 1
     assert bd.execute("SELECT tipo FROM avisos").fetchone()[0] == "etiquetado"
     assert bd.execute("SELECT count(*) FROM envios_etiquetado WHERE message_id IS NULL").fetchone()[0] == 0
-    for d in http.de("sendMessage"):
+    for d in http.ofertas():
         assert d["chat_id"] == CHAT and d["disable_web_page_preview"] is True
         assert d["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith("p:s:")
     # segunda ejecucion el mismo dia: nada
@@ -275,7 +283,7 @@ def test_respeta_lote_configurado_y_reglas_en_mensaje(bd):
     E.guardar_config(bd, "reglas", {"si": ["python"], "no": [], "ciudades": [], "modalidades": []}, AHORA)
     http = FakeTG()
     assert enviar(bd, http) == 4
-    textos = [d["text"] for d in http.de("sendMessage")]
+    textos = [d["text"] for d in http.ofertas()]
     assert sum("[azar]" not in t for t in textos) == round(4 * 0.7) == 3
     assert all("Nota" in t for t in textos)
     assert bd.execute("SELECT count(*) FROM envios_etiquetado WHERE muestra='reglas'").fetchone()[0] == 3
@@ -290,14 +298,14 @@ def test_lote_invalido_en_config_usa_defecto(bd):
 def test_lote_cortado_a_medias_se_reanuda_sin_duplicar(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
-    http.fallo_en[("sendMessage", 4)] = 500
+    http.fallo_en[("sendMessage", 5)] = 500   # 1 = intro, 2-4 = ofertas, 5 = 4a oferta
     with pytest.raises(RuntimeError):
         enviar(bd, http)
     assert n(bd, "envios_etiquetado") == 3 and n(bd, "avisos") == 0     # la reserva fallida se deshace
     ya = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()}
     http2 = FakeTG()
     assert enviar(bd, http2) == 7
-    assert len(http2.de("sendMessage")) == 7
+    assert len(http2.ofertas()) == 7 and http2.intros() == []   # la intro no se repite al reanudar
     assert n(bd, "envios_etiquetado") == 10 and n(bd, "avisos") == 1
     nuevos = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()} - ya
     assert len(nuevos) == 7
@@ -307,10 +315,10 @@ def test_lote_cortado_a_medias_se_reanuda_sin_duplicar(bd):
 def test_429_al_enviar_para_sin_reintentos(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
-    http.fallo_en[("sendMessage", 3)] = 429
+    http.fallo_en[("sendMessage", 4)] = 429   # 1 = intro, 2-3 = ofertas, 4 = 3a oferta
     with pytest.raises(tg.LimiteTelegram):
         enviar(bd, http)
-    assert len(http.de("sendMessage")) == 3          # ni un reintento ni mas envios
+    assert len(http.de("sendMessage")) == 4          # intro + 3 intentos: ni un reintento ni mas envios
     assert n(bd, "envios_etiquetado") == 2 and n(bd, "avisos") == 0
 
 
@@ -557,7 +565,7 @@ def test_main_prod_recoge_y_envia(conn, entorno):
     poner_ofertas(conn, [of(i) for i in range(12)])
     http = FakeTG([msg(5, "/lote 3")])
     assert E.main(["--entorno", "prod"], ahora=AHORA, http=http) == 0
-    assert len(http.de("sendMessage")) == 1 + 3          # respuesta al comando + lote
+    assert len(http.de("sendMessage")) == 1 + 1 + 3     # respuesta al comando + intro + lote
     assert cfg(conn, "telegram_offset") == 6 and n(conn, "envios_etiquetado") == 3
     # segunda ejecucion: mismo estado
     estado = (n(conn, "envios_etiquetado"), n(conn, "avisos"), cfg(conn, "lote"))
@@ -573,8 +581,8 @@ def test_main_dev_no_toca_offset_ni_comandos(conn, entorno):
     assert "offset" not in http.de("getUpdates")[0] and cfg(conn, "telegram_offset") == "AUSENTE"
     assert cfg(conn, "lote") == "AUSENTE" and n(conn, "envios_etiquetado") == 10
     assert all(d["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith("d:")
-               for d in http.de("sendMessage"))
-    assert all(d["text"].startswith("[dev] ") for d in http.de("sendMessage"))
+               for d in http.ofertas())
+    assert len(http.ofertas()) == 10 and all(d["text"].startswith("[dev] ") for d in http.ofertas())
 
 
 def test_main_dry_run_no_escribe_ni_llama(conn, entorno, capsys):
@@ -696,7 +704,7 @@ def test_main_hace_strip_de_token_y_chat(conn, db_url, monkeypatch):
     http = FakeTG([msg(5, "/ver")])
     assert E.main(["--entorno", "prod"], ahora=AHORA, http=http) == 0
     env = http.de("sendMessage")
-    assert len(env) == 1 + 3 and all(d["chat_id"] == CHAT for d in env)   # el comando del chat se obedece
+    assert len(env) == 1 + 1 + 3 and all(d["chat_id"] == CHAT for d in env)   # el comando del chat se obedece
     assert cfg(conn, "telegram_offset") == 6
 
 
