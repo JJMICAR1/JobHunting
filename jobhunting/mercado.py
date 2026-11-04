@@ -110,6 +110,16 @@ def enviar(texto: str, token: str, chat_id: str, http=None) -> None:
         raise RuntimeError(f"Telegram respondió {st} (no ok)")
 
 
+def ya_enviado(conn, dia: date) -> bool:
+    return conn.execute("SELECT 1 FROM avisos WHERE dia = %s AND tipo = 'mercado'", (dia,)).fetchone() is not None
+
+
+def registrar_envio(conn, dia: date, ahora: datetime) -> None:
+    conn.execute("INSERT INTO avisos (dia, tipo, enviado) VALUES (%s, 'mercado', %s) "
+                 "ON CONFLICT (dia, tipo) DO NOTHING", (dia, ahora))
+    conn.commit()
+
+
 def main(argv=None, ahora=None, http=None) -> int:
     ap = argparse.ArgumentParser(prog="jobhunting.mercado")
     ap.add_argument("--entorno", choices=["prod", "dev"], required=True)
@@ -121,10 +131,21 @@ def main(argv=None, ahora=None, http=None) -> int:
     if not url:
         print("Falta DATABASE_URL", file=sys.stderr)
         return 1
+    ahora = ahora or datetime.now(timezone.utc)
+    prod_envio = a.entorno == "prod" and not a.dry_run
+    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     try:
         conn = db.conectar(url)
         try:
             filas = leer(conn)
+            if prod_envio and token and chat:
+                # Varios crons de respaldo: en prod se envia como mucho una vez al dia (UTC).
+                if not any(f.dia == ahora.date() for f in filas):
+                    print("sin datos de hoy, no se envia")
+                    return 0
+                if ya_enviado(conn, ahora.date()):
+                    print("ya enviado hoy")
+                    return 0
         finally:
             conn.close()
     except RuntimeError as e:
@@ -133,12 +154,10 @@ def main(argv=None, ahora=None, http=None) -> int:
     except Exception as e:
         print(f"Error de BD: {type(e).__name__}", file=sys.stderr)
         return 1
-    ahora = ahora or datetime.now(timezone.utc)
     texto = formatear(filas, a.entorno, ahora.date())
     print(texto)
     if a.dry_run:
         return 0
-    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         print("::warning::Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID: mensaje no enviado")
         return 0
@@ -148,6 +167,15 @@ def main(argv=None, ahora=None, http=None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     print("Enviado a Telegram")
+    if prod_envio:
+        try:
+            conn = db.conectar(url)
+            try:
+                registrar_envio(conn, ahora.date(), ahora)
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"::warning::enviado, pero no se pudo registrar el aviso ({type(e).__name__})")
     return 0
 
 

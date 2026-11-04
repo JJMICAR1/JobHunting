@@ -1,16 +1,22 @@
 name: pipeline
+run-name: pipeline ${{ github.event_name == 'schedule' && 'prod' || inputs.entorno || 'dev' }}
 
-# Cron diario 05:17 UTC contra produccion (secreto NEO_URL_PROD). Manual: solo dev o dry-run.
+# Cron diario 05:17 UTC contra produccion (secreto NEO_URL_PROD) + crons de respaldo (06:47, 09:23, 12:53):
+# los respaldos no repiten si hoy ya hay una ejecucion ok de cada portal (--solo-si-falta).
+# Manual: dev, dry-run o prod (prod solo desde main; fuerza la ejecucion).
 # El cron solo se activa cuando este archivo esta en la rama por defecto (main).
 on:
   schedule:
     - cron: "17 5 * * *"
+    - cron: "47 6 * * *"
+    - cron: "23 9 * * *"
+    - cron: "53 12 * * *"
   workflow_dispatch:
     inputs:
       entorno:
-        description: "dev (Neon rama dev) o dry-run (sin escribir en BD)"
+        description: "dev (Neon rama dev), dry-run (sin escribir en BD) o prod (solo desde main)"
         type: choice
-        options: [dev, dry-run]
+        options: [dev, dry-run, prod]
         default: dev
       portal:
         description: "Portal a ejecutar (el cron y el push ejecutan todos)"
@@ -50,13 +56,18 @@ jobs:
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
           python -m jobhunting.pipeline --portal "$PORTAL"
       - name: Pipeline (prod)
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.entorno == 'prod') }}
         env:
           DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
           PORTAL: todos
+          EVENTO: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
+          if [ "$REF" != "refs/heads/main" ]; then echo "::error::Prod solo se ejecuta desde main (ref actual: $REF)"; exit 1; fi
           if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
-          python -m jobhunting.pipeline --portal "$PORTAL"
+          # Crons (principal y respaldos): no repetir si hoy ya esta hecho. El manual fuerza.
+          EXTRA=""; if [ "$EVENTO" = schedule ]; then EXTRA="--solo-si-falta"; fi
+          python -m jobhunting.pipeline --portal "$PORTAL" $EXTRA
       - name: Pipeline (dry-run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'dry-run' }}
         env:
