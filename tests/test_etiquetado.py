@@ -782,8 +782,6 @@ def test_ver_en_prod_calcula_y_guarda_auto_y_progreso_primero(bd):
     assert "python" in cfg(bd, "reglas_auto")["si"]
 
 
-@pytest.mark.xfail(strict=True, reason="reglas.py:159-160 _ver: `if a:` con dict de 4 listas vacias es truthy; "
-                   "falta el any(a.values()) en el commit")
 def test_ver_sin_etiquetas_suficientes_dice_nada_todavia(bd):
     http = FakeTG([msg(1, "/ver")])
     recoger(bd, http)
