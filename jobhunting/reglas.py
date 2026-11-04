@@ -16,7 +16,13 @@ MODALIDADES = ("presencial", "hibrido", "remoto")
 LOTE_MIN, LOTE_MAX = 1, 30
 META = 100
 PTS_SI, PTS_NO, PTS_CIUDAD, PTS_MODALIDAD = 1.0, -3.0, 0.5, 0.5
-_CLAVES = ("si", "no", "ciudades", "modalidades")
+_CLAVES = ("si", "no", "ciudades", "modalidades", "ignorar")
+# Aprendizaje automatico
+MIN_ETIQUETAS = 10
+MIN_APARICIONES = 3
+UMBRAL_SI, UMBRAL_NO = 0.7, 0.2
+TOPE_APRENDIDOS = 30
+STOPWORDS = frozenset("de del la el y i en para per con amb a o les els los las un una al".split())
 
 
 def normalizar(s: str | None) -> str:
@@ -36,12 +42,17 @@ class Reglas:
     no: tuple[str, ...] = ()
     ciudades: tuple[str, ...] = ()
     modalidades: tuple[str, ...] = ()
+    ignorar: tuple[str, ...] = ()   # terminos que el aprendizaje no usa nunca (/olvidar)
 
     def vacia(self) -> bool:
+        """Sin criterios de puntuacion (`ignorar` no puntua)."""
         return not (self.si or self.no or self.ciudades or self.modalidades)
 
     def a_dict(self) -> dict:
-        return {k: list(getattr(self, k)) for k in _CLAVES}
+        d = {k: list(getattr(self, k)) for k in _CLAVES if k != "ignorar"}
+        if self.ignorar:
+            d["ignorar"] = list(self.ignorar)
+        return d
 
     @classmethod
     def desde_dict(cls, d) -> "Reglas":
@@ -102,11 +113,13 @@ AYUDA = (
     "/si <término>  suma al título\n"
     "/no <término>  resta (título o empresa)\n"
     "/quitar <término>  lo quita de las listas\n"
+    "/olvidar <término>  el aprendizaje automático no lo usará nunca\n"
     "/ciudad <nombre>\n"
     "/modalidad presencial|hibrido|remoto\n"
     "/lote <1-30>  ofertas por día\n"
-    "/ver  reglas y progreso\n"
-    "/ayuda"
+    "/ver  tus reglas, lo que he aprendido de tus Sí/No y el progreso\n"
+    "/ayuda\n"
+    "Además aprendo solo de tus Sí/No (desde 10 etiquetas); lo que escribas aquí manda sobre lo aprendido."
 )
 
 
@@ -136,10 +149,20 @@ def _ver(r: Reglas, progreso: dict) -> str:
     def l(xs):
         return ", ".join(xs) if xs else "(vacío)"
     p = progreso or {}
+    # El progreso va primero: si el texto se recorta (4000 car.), no se pierde.
     lines = [
-        f"Sí: {l(r.si)}", f"No: {l(r.no)}", f"Ciudades: {l(r.ciudades)}", f"Modalidades: {l(r.modalidades)}",
         f"Progreso: {p.get('total', 0)}/{p.get('meta', META)} (Sí {p.get('si', 0)}, No {p.get('no', 0)})",
+        f"Sí: {l(r.si)}", f"No: {l(r.no)}", f"Ciudades: {l(r.ciudades)}", f"Modalidades: {l(r.modalidades)}",
     ]
+    if r.ignorar:
+        lines.append(f"Ignorados: {l(r.ignorar)}")
+    a = p.get("auto")
+    if a and any(a.values()):
+        lines.append("Aprendido de tus Sí/No: " + "; ".join(
+            f"{n}: {l(a.get(k) or [])}" for n, k in (("Sí", "si"), ("No", "no"), ("Ciudades", "ciudades"),
+                                                     ("Modalidades", "modalidades")) if a.get(k)))
+    elif "auto" in p:
+        lines.append(f"Aprendido de tus Sí/No: nada todavía (necesito {MIN_ETIQUETAS} etiquetas)")
     if "lote" in p:
         lines.append(f"Lote: {p['lote']} al día")
     return "\n".join(lines)
@@ -178,6 +201,17 @@ def aplicar_comando(reglas: Reglas, texto: str, progreso: dict | None = None) ->
         if otra:  # un termino no puede sumar y restar a la vez: el ultimo comando gana
             cambios[otra] = tuple(x for x in getattr(reglas, otra) if x != n)
         return _con(reglas, **cambios), f"Añadido a {clave}: {n}"
+    if cmd == "/olvidar":
+        n = normalizar(arg)
+        if not n:
+            return reglas, "Uso: /olvidar <término>"
+        if len(n) > MAX_TERMINO:
+            return reglas, f"Término demasiado largo (máximo {MAX_TERMINO} caracteres)"
+        if n in reglas.ignorar:
+            return reglas, f"Ya estaba ignorado: {n}"
+        if len(reglas.ignorar) >= MAX_LISTA:
+            return reglas, f"Lista llena (máximo {MAX_LISTA} términos)"
+        return _con(reglas, ignorar=reglas.ignorar + (n,)), f"Olvidado: {n} (no lo usaré al aprender)"
     if cmd == "/modalidad":
         n = normalizar(arg)
         if n not in MODALIDADES:
@@ -194,3 +228,74 @@ def aplicar_comando(reglas: Reglas, texto: str, progreso: dict | None = None) ->
             return reglas, f"No estaba: {n}"
         return _con(reglas, **cambios), f"Quitado: {n}"
     return reglas, "Comando no reconocido. /ayuda"
+
+
+def _terminos(titulo) -> set[str]:
+    """Palabras (3+ letras, sin stopwords) y bigramas contiguos del titulo normalizado."""
+    toks = normalizar(titulo).split()
+    ok = [len(t) >= 3 and t not in STOPWORDS for t in toks]
+    t = {x for x, v in zip(toks, ok) if v}
+    t |= {f"{a} {b}" for a, b, va, vb in zip(toks, toks[1:], ok, ok[1:]) if va and vb}
+    return t
+
+
+def _elegir(cuentas: dict, ignorar: set, umbral_si=None, umbral_no=None):
+    """Terminos con suficiente evidencia segun la tasa suavizada. Mas evidencia primero, luego alfabetico."""
+    si, no = [], []
+    for term, (n_si, n) in cuentas.items():
+        if n < MIN_APARICIONES or term in ignorar or len(term) > MAX_TERMINO:
+            continue
+        tasa = (n_si + 1) / (n + 2)
+        if umbral_si is not None and tasa >= umbral_si:
+            si.append((-n, term))
+        elif umbral_no is not None and tasa <= umbral_no:
+            no.append((-n, term))
+    return ([t for _, t in sorted(si)[:TOPE_APRENDIDOS]], [t for _, t in sorted(no)[:TOPE_APRENDIDOS]])
+
+
+def aprender(etiquetadas, ignorar=()) -> Reglas:
+    """Reglas aprendidas de ofertas etiquetadas (puro, determinista).
+
+    `etiquetadas`: dicts {titulo, empresa, ciudad, modalidad, etiqueta(bool)}. Con menos de MIN_ETIQUETAS
+    devuelve Reglas vacia. Un termino con >= MIN_APARICIONES etiquetas va a `si` si su tasa suavizada
+    (si+1)/(n+2) es >= 0,7 y a `no` si es <= 0,2; ciudades y modalidades, solo a la lista positiva (>= 0,7).
+    Maximo TOPE_APRENDIDOS por lista. Los terminos de `ignorar` no se usan nunca.
+    """
+    etiquetadas = list(etiquetadas)
+    if len(etiquetadas) < MIN_ETIQUETAS:
+        return Reglas()
+    ign = {normalizar(x) for x in ignorar}
+    pal: dict[str, list[int]] = {}
+    ciu: dict[str, list[int]] = {}
+    mod: dict[str, list[int]] = {}
+
+    def sumar(d, k, et):
+        c = d.setdefault(k, [0, 0])
+        c[0] += 1 if et else 0
+        c[1] += 1
+
+    for e in etiquetadas:
+        et = bool(e["etiqueta"])
+        for t in _terminos(e.get("titulo")):
+            sumar(pal, t, et)
+        c = normalizar(e.get("ciudad"))
+        if c:
+            sumar(ciu, c, et)
+        m = normalizar(e.get("modalidad"))
+        if m in MODALIDADES:
+            sumar(mod, m, et)
+    si, no = _elegir(pal, ign, UMBRAL_SI, UMBRAL_NO)
+    return Reglas(si=tuple(si), no=tuple(no),
+                  ciudades=tuple(_elegir(ciu, ign, UMBRAL_SI)[0]),
+                  modalidades=tuple(_elegir(mod, ign, UMBRAL_SI)[0]))
+
+
+def combinar(manuales: Reglas, auto: Reglas) -> Reglas:
+    """Union de manuales + aprendidas. Un termino manual manda: si esta en `no` manual no entra en `si` auto, y al reves."""
+    def mas(a, b, excluir):
+        return a + tuple(x for x in b if x not in a and x not in excluir)
+    return Reglas(si=mas(manuales.si, auto.si, manuales.no),
+                  no=mas(manuales.no, auto.no, manuales.si),
+                  ciudades=mas(manuales.ciudades, auto.ciudades, ()),
+                  modalidades=mas(manuales.modalidades, auto.modalidades, ()),
+                  ignorar=manuales.ignorar)

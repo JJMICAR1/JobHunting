@@ -44,6 +44,14 @@ class FakeTG:
             return 200, {"ok": True, "result": {"message_id": self.msg_id}}
         return 200, {"ok": True, "result": True}
 
+    def ofertas(self):
+        """sendMessage de ofertas (llevan botones); excluye intro y respuestas a comandos."""
+        return [d for d in self.de("sendMessage") if "reply_markup" in d]
+
+    def intros(self):
+        return [d for d in self.de("sendMessage")
+                if "reply_markup" not in d and d["text"].startswith(("Lote de hoy", "Aún aprendo"))]
+
     def de(self, metodo):
         return [d for m, d in self.calls if m == metodo]
 
@@ -68,6 +76,10 @@ def poner_ofertas(conn, ofs, ahora=AHORA):
 
 def n(conn, tabla):
     return conn.execute(f"SELECT count(*) FROM {tabla}").fetchone()[0]
+
+
+def na(conn, tipo="etiquetado"):
+    return conn.execute("SELECT count(*) FROM avisos WHERE tipo = %s", (tipo,)).fetchone()[0]
 
 
 def cfg(conn, clave):
@@ -215,17 +227,16 @@ def test_envio_basico_y_una_vez_al_dia(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
     assert enviar(bd, http) == 10
-    assert len(http.de("sendMessage")) == 10 and n(bd, "envios_etiquetado") == 10
-    assert n(bd, "avisos") == 1
-    assert bd.execute("SELECT tipo FROM avisos").fetchone()[0] == "etiquetado"
+    assert len(http.ofertas()) == 10 and len(http.intros()) == 1 and n(bd, "envios_etiquetado") == 10
+    assert na(bd) == 1 and na(bd, "etiquetado_intro") == 1
     assert bd.execute("SELECT count(*) FROM envios_etiquetado WHERE message_id IS NULL").fetchone()[0] == 0
-    for d in http.de("sendMessage"):
+    for d in http.ofertas():
         assert d["chat_id"] == CHAT and d["disable_web_page_preview"] is True
         assert d["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith("p:s:")
     # segunda ejecucion el mismo dia: nada
     http2 = FakeTG()
     assert enviar(bd, http2) == 0 and http2.calls == []
-    assert n(bd, "envios_etiquetado") == 10 and n(bd, "avisos") == 1
+    assert n(bd, "envios_etiquetado") == 10 and na(bd) == 1
     # a otra hora del mismo dia, tambien
     assert enviar(bd, http2, ahora=utc(2026, 11, 4, 22, 0)) == 0 and http2.calls == []
 
@@ -258,7 +269,7 @@ def test_registrar_envio_duplicado_devuelve_none(bd):
 def test_sin_ofertas_de_hoy_no_envia(bd, capsys):
     poner_ofertas(bd, [of(i) for i in range(5)], utc(2026, 11, 3, 9, 0))   # ayer
     http = FakeTG()
-    assert enviar(bd, http) == 0 and http.calls == [] and n(bd, "avisos") == 0
+    assert enviar(bd, http) == 0 and http.calls == [] and na(bd) == 0
     assert "sin ofertas" in capsys.readouterr().out
 
 
@@ -275,7 +286,7 @@ def test_respeta_lote_configurado_y_reglas_en_mensaje(bd):
     E.guardar_config(bd, "reglas", {"si": ["python"], "no": [], "ciudades": [], "modalidades": []}, AHORA)
     http = FakeTG()
     assert enviar(bd, http) == 4
-    textos = [d["text"] for d in http.de("sendMessage")]
+    textos = [d["text"] for d in http.ofertas()]
     assert sum("[azar]" not in t for t in textos) == round(4 * 0.7) == 3
     assert all("Nota" in t for t in textos)
     assert bd.execute("SELECT count(*) FROM envios_etiquetado WHERE muestra='reglas'").fetchone()[0] == 3
@@ -290,15 +301,15 @@ def test_lote_invalido_en_config_usa_defecto(bd):
 def test_lote_cortado_a_medias_se_reanuda_sin_duplicar(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
-    http.fallo_en[("sendMessage", 4)] = 500
+    http.fallo_en[("sendMessage", 5)] = 500   # 1 = intro, 2-4 = ofertas, 5 = 4a oferta
     with pytest.raises(RuntimeError):
         enviar(bd, http)
-    assert n(bd, "envios_etiquetado") == 3 and n(bd, "avisos") == 0     # la reserva fallida se deshace
+    assert n(bd, "envios_etiquetado") == 3 and na(bd) == 0     # la reserva fallida se deshace
     ya = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()}
     http2 = FakeTG()
     assert enviar(bd, http2) == 7
-    assert len(http2.de("sendMessage")) == 7
-    assert n(bd, "envios_etiquetado") == 10 and n(bd, "avisos") == 1
+    assert len(http2.ofertas()) == 7 and http2.intros() == []   # la intro no se repite al reanudar
+    assert n(bd, "envios_etiquetado") == 10 and na(bd) == 1
     nuevos = {r[0] for r in bd.execute("SELECT id_portal FROM envios_etiquetado").fetchall()} - ya
     assert len(nuevos) == 7
     assert enviar(bd, FakeTG()) == 0
@@ -307,20 +318,20 @@ def test_lote_cortado_a_medias_se_reanuda_sin_duplicar(bd):
 def test_429_al_enviar_para_sin_reintentos(bd):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
-    http.fallo_en[("sendMessage", 3)] = 429
+    http.fallo_en[("sendMessage", 4)] = 429   # 1 = intro, 2-3 = ofertas, 4 = 3a oferta
     with pytest.raises(tg.LimiteTelegram):
         enviar(bd, http)
-    assert len(http.de("sendMessage")) == 3          # ni un reintento ni mas envios
-    assert n(bd, "envios_etiquetado") == 2 and n(bd, "avisos") == 0
+    assert len(http.de("sendMessage")) == 4          # intro + 3 intentos: ni un reintento ni mas envios
+    assert n(bd, "envios_etiquetado") == 2 and na(bd) == 0
 
 
 def test_dry_run_en_enviar_lote_no_escribe_ni_llama(bd, capsys):
     poner_ofertas(bd, [of(i) for i in range(15)])
     http = FakeTG()
     assert enviar(bd, http, dry=True) == 10
-    assert http.calls == [] and n(bd, "envios_etiquetado") == 0 and n(bd, "avisos") == 0
+    assert http.calls == [] and n(bd, "envios_etiquetado") == 0 and na(bd) == 0
     out = capsys.readouterr().out
-    assert "sin envío" in out and TOKEN not in out and CHAT not in out
+    assert "(sin enviar)" in out and TOKEN not in out and CHAT not in out
 
 
 # --- recoger: clics ---
@@ -557,7 +568,7 @@ def test_main_prod_recoge_y_envia(conn, entorno):
     poner_ofertas(conn, [of(i) for i in range(12)])
     http = FakeTG([msg(5, "/lote 3")])
     assert E.main(["--entorno", "prod"], ahora=AHORA, http=http) == 0
-    assert len(http.de("sendMessage")) == 1 + 3          # respuesta al comando + lote
+    assert len(http.de("sendMessage")) == 1 + 1 + 3     # respuesta al comando + intro + lote
     assert cfg(conn, "telegram_offset") == 6 and n(conn, "envios_etiquetado") == 3
     # segunda ejecucion: mismo estado
     estado = (n(conn, "envios_etiquetado"), n(conn, "avisos"), cfg(conn, "lote"))
@@ -573,8 +584,8 @@ def test_main_dev_no_toca_offset_ni_comandos(conn, entorno):
     assert "offset" not in http.de("getUpdates")[0] and cfg(conn, "telegram_offset") == "AUSENTE"
     assert cfg(conn, "lote") == "AUSENTE" and n(conn, "envios_etiquetado") == 10
     assert all(d["reply_markup"]["inline_keyboard"][0][0]["callback_data"].startswith("d:")
-               for d in http.de("sendMessage"))
-    assert all(d["text"].startswith("[dev] ") for d in http.de("sendMessage"))
+               for d in http.ofertas())
+    assert len(http.ofertas()) == 10 and all(d["text"].startswith("[dev] ") for d in http.ofertas())
 
 
 def test_main_dry_run_no_escribe_ni_llama(conn, entorno, capsys):
@@ -696,7 +707,7 @@ def test_main_hace_strip_de_token_y_chat(conn, db_url, monkeypatch):
     http = FakeTG([msg(5, "/ver")])
     assert E.main(["--entorno", "prod"], ahora=AHORA, http=http) == 0
     env = http.de("sendMessage")
-    assert len(env) == 1 + 3 and all(d["chat_id"] == CHAT for d in env)   # el comando del chat se obedece
+    assert len(env) == 1 + 1 + 3 and all(d["chat_id"] == CHAT for d in env)   # el comando del chat se obedece
     assert cfg(conn, "telegram_offset") == 6
 
 
@@ -709,3 +720,209 @@ def test_respuesta_a_comandos_se_recorta_a_4000(bd):
     recoger(bd, http)
     t = http.de("sendMessage")[0]["text"]
     assert len(t) == E.MAX_TEXTO == 4000
+
+
+# --- reglas aprendidas: bot ---
+
+def etiquetar(bd, spec, ahora=AHORA):
+    """spec: [(titulo, ciudad, modalidad, bool)]: crea ofertas, envios y etiquetas directamente."""
+    for i, (t, c, m, et) in enumerate(spec):
+        o = of(f"e{i}", titulo=t, ciudad=c, modalidad=m)
+        poner_ofertas(bd, [o], utc(2026, 11, 3, 8, 0))
+        eid = E.registrar_envio(bd, "tecnoempleo", f"rf-e{i}", utc(2026, 11, 3, 9, 0), "azar", None)
+        E.guardar_etiqueta(bd, eid, et, ahora)
+
+
+PATRON = [("Python dev", "Girona", "remoto", True)] * 5 + [("Cocinero jefe", "Lleida", "presencial", False)] * 5
+
+
+def test_calcular_auto_guarda_solo_si_se_pide(bd):
+    etiquetar(bd, PATRON)
+    a = E.calcular_auto(bd, R.Reglas(), AHORA, guardar=False)
+    assert "python" in a.si and "cocinero" in a.no and cfg(bd, "reglas_auto") == "AUSENTE"
+    E.calcular_auto(bd, R.Reglas(), AHORA, guardar=True)
+    assert cfg(bd, "reglas_auto")["si"] == list(a.si)
+
+
+def test_calcular_auto_respeta_ignorar(bd):
+    etiquetar(bd, PATRON)
+    a = E.calcular_auto(bd, R.Reglas(ignorar=("python",)), AHORA, guardar=False)
+    assert "python" not in a.si and "python dev" in a.si
+
+
+def test_reglas_auto_solo_se_guarda_en_prod_sin_dry_run(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i) for i in range(5)])
+    enviar(bd, FakeTG(), entorno="dev")
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+    bd.execute("DELETE FROM avisos")
+    enviar(bd, FakeTG(), entorno="prod", dry=True)
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+    enviar(bd, FakeTG(), entorno="prod")
+    assert "python" in cfg(bd, "reglas_auto")["si"]
+
+
+def test_dev_nunca_escribe_config(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i) for i in range(5)])
+    antes = bd.execute("SELECT clave, valor FROM config ORDER BY 1").fetchall()
+    http = FakeTG([msg(1, "/si x"), msg(2, "/ver")])
+    recoger(bd, http, entorno="dev")
+    enviar(bd, http, entorno="dev")
+    assert bd.execute("SELECT clave, valor FROM config ORDER BY 1").fetchall() == antes
+
+
+def test_ver_en_prod_calcula_y_guarda_auto_y_progreso_primero(bd):
+    etiquetar(bd, PATRON)
+    http = FakeTG([msg(1, "/ver")])
+    recoger(bd, http)
+    t = http.de("sendMessage")[0]["text"]
+    assert t.startswith("Progreso: 10/100 (Sí 5, No 5)")
+    assert "Aprendido de tus Sí/No" in t and "python" in t
+    assert "python" in cfg(bd, "reglas_auto")["si"]
+
+
+def test_ver_sin_etiquetas_suficientes_dice_nada_todavia(bd):
+    http = FakeTG([msg(1, "/ver")])
+    recoger(bd, http)
+    assert "nada todavía" in http.de("sendMessage")[0]["text"]
+
+
+def test_olvidar_y_quitar_sobre_ignorar_por_bot(bd):
+    etiquetar(bd, PATRON)
+    recoger(bd, FakeTG([msg(1, "/olvidar Python")]))
+    assert cfg(bd, "reglas")["ignorar"] == ["python"]
+    assert "python" not in E.calcular_auto(bd, E.leer_reglas(bd), AHORA, False).si
+    http = FakeTG([msg(2, "/quitar python")])
+    recoger(bd, http)
+    assert "ignorar" not in cfg(bd, "reglas") and http.de("sendMessage")[0]["text"] == "Quitado: python"
+    assert "python" in E.calcular_auto(bd, E.leer_reglas(bd), AHORA, False).si
+
+
+def test_intro_variantes():
+    el = [{"muestra": "reglas"}] * 7 + [{"muestra": "azar"}] * 3
+    assert E.mensaje_intro(el, R.Reglas(), 4) == "Aún aprendo: llevas 4/10 etiquetas para empezar a puntuar"
+    sin = E.mensaje_intro(el, R.Reglas(), 40)
+    assert sin.startswith("Lote de hoy: 10 al azar") and "patrones" in sin
+    auto = R.Reglas(si=tuple(f"s{i}" for i in range(8)), no=("malo",))
+    m = E.mensaje_intro(el, auto, 40).splitlines()
+    assert m == ["Lote de hoy: 7 por lo que he aprendido de ti, 3 al azar", "Te gusta: s0, s1, s2, s3, s4",
+                 "No te gusta: malo"]
+    solo_no = E.mensaje_intro(el, R.Reglas(no=("malo",)), 40)
+    assert "Te gusta" not in solo_no and "No te gusta: malo" in solo_no
+
+
+def test_intro_se_envia_una_vez_con_menos_de_10_etiquetas(bd):
+    poner_ofertas(bd, [of(i) for i in range(12)])
+    http = FakeTG()
+    enviar(bd, http)
+    assert [d["text"] for d in http.intros()] == ["Aún aprendo: llevas 0/10 etiquetas para empezar a puntuar"]
+    assert http.de("sendMessage")[0] == http.intros()[0]      # va la primera
+
+
+def test_intro_con_patrones_y_nota_usa_manual_mas_auto(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo="Python dev" if i < 3 else f"Otro {i}", ciudad="Girona", modalidad="remoto")
+                       for i in range(20)])
+    E.guardar_config(bd, "reglas", {"si": ["otro"], "no": [], "ciudades": [], "modalidades": []}, AHORA)
+    http = FakeTG()
+    enviar(bd, http)
+    intro = http.intros()[0]["text"]
+    assert intro.startswith("Lote de hoy: 7 por lo que he aprendido de ti, 3 al azar") and "Te gusta: " in intro
+    por_reglas = [d["text"] for d in http.ofertas() if "[azar]" not in d["text"]]
+    assert len(por_reglas) == 7
+    # "Python dev": auto si dev, python, "python dev" (+3) + ciudad (+0,5) + modalidad (+0,5) = 4,0
+    assert any("Nota 4,0" in t for t in por_reglas if t.startswith("Python dev"))
+    # "Otro n": manual "otro" (+1) + ciudad + modalidad = 2,0 -> la nota usa manual + aprendido
+    assert any("Nota 2,0" in t for t in por_reglas if t.startswith("Otro"))
+
+
+def test_manual_manda_sobre_auto_en_la_nota(bd):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo="Python dev") for i in range(12)])
+    E.guardar_config(bd, "reglas", {"no": ["python"], "si": [], "ciudades": [], "modalidades": []}, AHORA)
+    http = FakeTG()
+    enviar(bd, http)
+    notas = [d["text"] for d in http.ofertas() if "Nota" in d["text"]]
+    assert notas and all("-python" in t for t in notas)      # manual "no" python; el auto "si" no entra
+
+
+def test_intro_no_se_repite_si_falla_la_primera_oferta(bd):
+    poner_ofertas(bd, [of(i) for i in range(12)])
+    http = FakeTG()
+    http.fallo_en[("sendMessage", 2)] = 500          # 1 = intro, 2 = primera oferta
+    with pytest.raises(RuntimeError):
+        enviar(bd, http)
+    http2 = FakeTG()
+    enviar(bd, http2)
+    assert http2.intros() == []
+
+
+def test_dry_run_y_sin_token_no_imprimen_datos_personales(bd, capsys):
+    etiquetar(bd, PATRON)
+    poner_ofertas(bd, [of(i, titulo=f"Python secretisimo {i}") for i in range(12)])
+    for dry, tok in ((True, TOKEN), (False, None)):
+        http = FakeTG()
+        assert E.enviar_lote(bd, "prod", tok, CHAT if tok else None, AHORA, dry, http) == 10
+        out = capsys.readouterr().out
+        assert out.startswith("(sin enviar) 10 ofertas:") and "términos aprendidos" in out
+        for dato in ("secretisimo", "Oferta", "ACME", "python", "cocinero", "tecnoempleo", "http"):
+            assert dato not in out.lower().replace("(sin enviar)", ""), dato
+        assert http.calls == []
+    assert cfg(bd, "reglas_auto") == "AUSENTE"
+
+
+# --- varios comandos en un mensaje ---
+
+def test_multilinea_en_orden_una_sola_respuesta(bd):
+    http = FakeTG([msg(1, "/si a1x\n/no b1x\n/ver")])
+    recoger(bd, http)
+    assert cfg(bd, "reglas")["si"] == ["a1x"] and cfg(bd, "reglas")["no"] == ["b1x"]
+    env = http.de("sendMessage")
+    assert len(env) == 1
+    lineas = env[0]["text"].splitlines()
+    assert lineas[0] == "Añadido a si: a1x" and lineas[1] == "Añadido a no: b1x"
+    assert "Sí: a1x" in env[0]["text"] and "No: b1x" in env[0]["text"]     # /ver ve el estado acumulado
+
+
+def test_multilinea_ignora_lineas_sin_barra(bd):
+    http = FakeTG([msg(1, "/si uno\nhola\ntexto suelto\n   /si dos  \n\n")])
+    recoger(bd, http)
+    assert cfg(bd, "reglas")["si"] == ["uno", "dos"]
+    assert http.de("sendMessage")[0]["text"].splitlines() == ["Añadido a si: uno", "Añadido a si: dos"]
+
+
+def test_multilinea_corta_a_60_comandos(bd):
+    texto = "\n".join(f"/si t{i}" for i in range(75))
+    http = FakeTG([msg(1, texto)])
+    recoger(bd, http)
+    assert len(cfg(bd, "reglas")["si"]) == E.MAX_LINEAS == 60
+    assert cfg(bd, "reglas")["si"][-1] == "t59" and len(http.de("sendMessage")) == 1
+
+
+def test_multilinea_idempotente_al_reprocesar(bd):
+    u = [msg(1, "/si a1x\n/no b1x\n/olvidar c1x\n/lote 7")]
+    recoger(bd, FakeTG(u))
+    e1 = (cfg(bd, "reglas"), cfg(bd, "lote"))
+    http = FakeTG(u)
+    recoger(bd, http)
+    assert (cfg(bd, "reglas"), cfg(bd, "lote")) == e1 == ({"si": ["a1x"], "no": ["b1x"], "ciudades": [],
+                                                           "modalidades": [], "ignorar": ["c1x"]}, 7)
+    assert "Ya estaba: a1x" in http.de("sendMessage")[0]["text"]
+
+
+def test_multilinea_lote_y_ver_guarda_antes(bd):
+    http = FakeTG([msg(1, "/si a1x\n/lote 5\n/ver")])
+    recoger(bd, http)
+    assert cfg(bd, "lote") == 5 and cfg(bd, "reglas")["si"] == ["a1x"]
+    assert http.de("sendMessage")[0]["text"].splitlines()[1] == "Lote: 5 al día"
+    assert cfg(bd, "reglas_auto") is not None
+
+
+def test_multilinea_respuesta_recortada_y_solo_texto_sin_barras_no_responde(bd):
+    http = FakeTG([msg(1, "solo texto\nmas texto")])
+    recoger(bd, http)
+    assert http.de("sendMessage") == [] and cfg(bd, "reglas") == "AUSENTE"
+    http = FakeTG([msg(2, "/ver\n" * 60)])
+    recoger(bd, http)
+    assert len(http.de("sendMessage")[0]["text"]) <= E.MAX_TEXTO

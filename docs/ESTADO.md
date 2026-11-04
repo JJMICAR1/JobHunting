@@ -10,7 +10,8 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
 2. Cada mañana: mirar que llega "Mercado laboral en Catalunya" a Telegram. Si un día no llega antes de las 14:00 de
    Madrid, lanzar a mano Actions → pipeline → Run workflow → rama `main`, entorno `prod`.
 3. Fusionar el PR #24 (ESTADO de la Fase 6) y después el PR de la Fase 7 (etiquetado).
-4. Tras fusionar: escribir tus criterios al bot en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
+4. Tras fusionar el PR de reglas aprendidas: pegar en un solo mensaje al bot el bloque de criterios que el jefe propuso en el
+   chat (no está en el repo). Si no, escribir tus criterios al bot en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
    `/quitar`, `/lote`, `/ver`). Cada día llega un lote de ofertas con botones Sí/No: pulsar. Los clics se recogen cada hora.
    Las ofertas que empiezan por `[dev]` son de pruebas (los clics se pueden perder; no cuentan).
    Puerta de la Fase 7: `/ver` muestra 100/100. Con `/lote 30` se llega antes.
@@ -157,6 +158,11 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   - `.github/workflows/etiquetado.yml`: cron a los 37 min de cada hora (prod, solo main), manual y push (dev). En el latido.
   - Tests: 876 con BD. Reviewer: un bloqueante (update veneno) arreglado; resto aplicado salvo comprobar `from.id`
     (equivale al chat en un chat privado).
+  - Reglas aprendidas (CEO, 2026-11-04: "hazlo tú como mi segundo, yo digo sí o no"): con 10+ etiquetas el bot aprende
+    términos Sí/No del título, ciudades y modalidades (`reglas.aprender`, guardado en `config.reglas_auto`, solo prod);
+    lo manual manda; `/olvidar` excluye un término. Cada lote empieza con un mensaje de lo aprendido (una vez al día).
+    Varios comandos en un mensaje (uno por línea). Sin envío real, el log solo muestra contadores (los logs son públicos).
+    Tests: 908 con BD. Reviewer: un bloqueante (términos en el log público) arreglado.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.

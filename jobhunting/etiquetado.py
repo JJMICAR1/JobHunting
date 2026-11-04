@@ -16,6 +16,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from jobhunting import reglas as R
 from jobhunting import telegram as tg
 
+TIPO_INTRO = "etiquetado_intro"
 TIPO_AVISO = "etiquetado"
 LOTE_DEFECTO = 10
 FRACCION_REGLAS = 0.7
@@ -55,6 +56,23 @@ def leer_reglas(conn) -> R.Reglas:
 def leer_lote(conn) -> int:
     v = leer_config(conn, "lote", LOTE_DEFECTO)
     return v if isinstance(v, int) and not isinstance(v, bool) and R.LOTE_MIN <= v <= R.LOTE_MAX else LOTE_DEFECTO
+
+
+def etiquetadas(conn) -> list[dict]:
+    """Etiquetas unidas a su oferta, en orden estable (entrada de `reglas.aprender`)."""
+    filas = conn.execute(
+        "SELECT o.titulo, o.empresa, o.ciudad, o.modalidad, e.etiqueta FROM etiquetas e "
+        "JOIN ofertas o ON o.portal = e.portal AND o.id_portal = e.id_portal "
+        "ORDER BY e.etiquetada, e.portal, e.id_portal").fetchall()
+    return [dict(zip(("titulo", "empresa", "ciudad", "modalidad", "etiqueta"), f)) for f in filas]
+
+
+def calcular_auto(conn, manuales: R.Reglas, ahora: datetime, guardar: bool) -> R.Reglas:
+    """Reglas aprendidas de las etiquetas (respetando `ignorar`). Con `guardar` las deja en config.reglas_auto."""
+    auto = R.aprender(etiquetadas(conn), manuales.ignorar)
+    if guardar:
+        guardar_config(conn, "reglas_auto", auto.a_dict(), ahora)
+    return auto
 
 
 def hay_ofertas_de_hoy(conn, dia: date) -> bool:
@@ -121,13 +139,13 @@ def progreso(conn) -> dict:
     return {"total": t, "si": si, "no": t - si, "meta": R.META, "lote": leer_lote(conn)}
 
 
-def aviso_hecho(conn, dia: date) -> bool:
-    return conn.execute("SELECT 1 FROM avisos WHERE dia = %s AND tipo = %s", (dia, TIPO_AVISO)).fetchone() is not None
+def aviso_hecho(conn, dia: date, tipo: str = TIPO_AVISO) -> bool:
+    return conn.execute("SELECT 1 FROM avisos WHERE dia = %s AND tipo = %s", (dia, tipo)).fetchone() is not None
 
 
-def registrar_aviso(conn, dia: date, ahora: datetime) -> None:
+def registrar_aviso(conn, dia: date, ahora: datetime, tipo: str = TIPO_AVISO) -> None:
     conn.execute("INSERT INTO avisos (dia, tipo, enviado) VALUES (%s, %s, %s) ON CONFLICT (dia, tipo) DO NOTHING",
-                 (dia, TIPO_AVISO, ahora))
+                 (dia, tipo, ahora))
 
 
 # --- seleccion y formato (puros) ---
@@ -171,6 +189,21 @@ def formatear(c: dict, entorno: str, con_reglas: bool) -> str:
     return "\n".join(lineas)
 
 
+def mensaje_intro(elegidas: list[dict], auto: R.Reglas, n_etiquetas: int, top: int = 5) -> str:
+    """Primer mensaje del lote: que se ha aprendido (o cuanto falta para empezar)."""
+    if auto.vacia():
+        if n_etiquetas < R.MIN_ETIQUETAS:
+            return f"Aún aprendo: llevas {n_etiquetas}/{R.MIN_ETIQUETAS} etiquetas para empezar a puntuar"
+        return f"Lote de hoy: {len(elegidas)} al azar (aún no he encontrado patrones claros en tus Sí/No)"
+    n_r = sum(c["muestra"] == "reglas" for c in elegidas)
+    lineas = [f"Lote de hoy: {n_r} por lo que he aprendido de ti, {len(elegidas) - n_r} al azar"]
+    if auto.si:
+        lineas.append("Te gusta: " + ", ".join(auto.si[:top]))
+    if auto.no:
+        lineas.append("No te gusta: " + ", ".join(auto.no[:top]))
+    return "\n".join(lineas)
+
+
 def teclado(entorno: str, envio_id: int) -> dict:
     p = PREFIJO[entorno]
     return {"inline_keyboard": [[{"text": "Sí", "callback_data": f"{p}:s:{envio_id}"},
@@ -185,6 +218,7 @@ def parsear_callback(data: str, entorno: str):
     return partes[1] == "s", int(partes[2])
 
 
+MAX_LINEAS = 60     # comandos por mensaje
 MAX_TEXTO = 4000   # Telegram admite 4096 caracteres por mensaje
 
 # --- recoger ---
@@ -253,15 +287,26 @@ def _procesar(conn, u: dict, entorno: str, token: str, chat: str, ahora: datetim
                   {"chat_id": chat, "text": "Las reglas guardadas tienen un formato no válido (revisar config.reglas en Neon)"},
                   http)
         return
-    lote = R.parsear_lote(texto)
-    if isinstance(lote, int):
-        guardar_config(conn, "lote", lote, ahora)
-        resp = f"Lote: {lote} al día"
-    else:
+    # Un mensaje puede traer varios comandos, uno por linea (se pegan de una vez).
+    lineas = [x.strip() for x in texto.splitlines() if x.strip().startswith("/")][:MAX_LINEAS]
+    original, resps = reglas, []
+    for linea in lineas:
+        lote = R.parsear_lote(linea)
+        if isinstance(lote, int):
+            guardar_config(conn, "lote", lote, ahora)
+            resps.append(f"Lote: {lote} al día")
+            continue
         prog = progreso(conn)
-        nuevas, resp = R.aplicar_comando(reglas, texto, prog)
-        if nuevas != reglas:
-            guardar_config(conn, "reglas", nuevas.a_dict(), ahora)
+        if R._partir(linea)[0] == "/ver":
+            if reglas != original:   # /ver tras cambios en el mismo mensaje: guardar antes de calcular
+                guardar_config(conn, "reglas", reglas.a_dict(), ahora)
+                original = reglas
+            prog["auto"] = calcular_auto(conn, reglas, ahora, guardar=True).a_dict()
+        reglas, resp = R.aplicar_comando(reglas, linea, prog)
+        resps.append(resp)
+    if reglas != original:
+        guardar_config(conn, "reglas", reglas.a_dict(), ahora)
+    resp = "\n".join(resps)
     _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": resp[:MAX_TEXTO]}, http)
 
 
@@ -278,7 +323,9 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
     if not hay_ofertas_de_hoy(conn, dia):
         print("sin ofertas vistas hoy, no se envía lote")
         return 0
-    reglas, lote = leer_reglas(conn), leer_lote(conn)
+    manuales, lote = leer_reglas(conn), leer_lote(conn)
+    auto = calcular_auto(conn, manuales, ahora, guardar=real and entorno == "prod")
+    reglas = R.combinar(manuales, auto)
     pendientes = lote - (enviados_hoy(conn, dia) if real else 0)   # reanuda un lote cortado a medias
     if pendientes <= 0:
         if real:
@@ -289,11 +336,19 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
         print("sin candidatas nuevas")
         return 0
     enviadas = 0
+    intro = mensaje_intro(elegidas, auto, conn.execute("SELECT count(*) FROM etiquetas").fetchone()[0])
+    if real and not aviso_hecho(conn, dia, TIPO_INTRO):   # una intro al dia, aunque el lote se reanude
+        _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": intro}, http)
+        registrar_aviso(conn, dia, ahora, TIPO_INTRO)
+    elif not real:
+        # Log publico: solo contadores (ni ofertas elegidas ni terminos aprendidos, que son datos personales).
+        n_reglas = sum(1 for c in elegidas if c["muestra"] == "reglas")
+        n_auto = len(auto.si) + len(auto.no) + len(auto.ciudades) + len(auto.modalidades)
+        print(f"(sin enviar) {len(elegidas)} ofertas: {n_reglas} por reglas, {len(elegidas) - n_reglas} al azar; "
+              f"{n_auto} términos aprendidos")
+        return len(elegidas)
     for c in elegidas:
         texto = formatear(c, entorno, not reglas.vacia())
-        if not real:
-            print(f"--- [{c['muestra']}] ---\n{texto}\n")
-            continue
         envio_id = registrar_envio(conn, c["portal"], c["id_portal"], ahora, c["muestra"], c["nota"])
         if envio_id is None:
             continue

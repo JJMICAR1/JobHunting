@@ -31,6 +31,20 @@ Comandos (solo desde el chat `TELEGRAM_CHAT_ID`; los demás se ignoran):
 `/ciudad <nombre>`, `/modalidad presencial|hibrido|remoto`, `/lote <1-30>`, `/ver` (reglas y progreso: N/100, Sí, No),
 `/ayuda`. Son idempotentes (son conjuntos). Un término tiene como mucho 60 caracteres y una lista, como mucho 200 términos.
 
+## Reglas aprendidas (el bot las deduce de tus Sí/No)
+No hace falta escribir criterios: el bot aprende de las etiquetas (`reglas.aprender`, puro y determinista).
+- Con menos de 10 etiquetas no aprende nada (devuelve reglas vacías).
+- Términos: palabras normalizadas del título (3+ caracteres, sin stopwords es/ca como de, la, per, amb) y bigramas contiguos.
+- Para cada término con al menos 3 etiquetas: tasa suavizada `(si+1)/(n+2)`. Va a `si` si tasa >= 0,7 y a `no` si <= 0,2.
+  Ciudades y modalidades: solo a la lista positiva (tasa >= 0,7).
+- Máximo 30 términos por lista, primero los de más evidencia (n mayor; empate, orden alfabético).
+- Se recalculan antes de enviar el lote y con `/ver`, y se guardan en `config.reglas_auto` (solo prod y sin `--dry-run`).
+- La nota usa manuales + aprendidas, pero **lo manual manda**: un término puesto a mano en `no` no puede estar en `si` aprendido, y al revés.
+- `/olvidar <término>` lo mete en `ignorar` (dentro de `config.reglas`): el aprendizaje no lo usa nunca. `/quitar` lo saca de ahí.
+- `/ver` muestra tus reglas manuales, lo aprendido aparte («Aprendido de tus Sí/No») y el progreso.
+- El lote abre con un mensaje corto: «Lote de hoy: 7 por lo que he aprendido de ti, 3 al azar» y los 5 términos principales,
+  o «Aún aprendo: llevas N/10 etiquetas para empezar a puntuar». No se repite si se reanuda un lote cortado.
+
 ## Bot (`jobhunting/etiquetado.py`, `python -m jobhunting.etiquetado --entorno prod|dev [--dry-run]`)
 1. **Recoger**: `getUpdates` (`timeout=0`, `allowed_updates=["message","callback_query"]`).
    - En prod se envía `offset` = `config.telegram_offset` y, al terminar, se guarda el último `update_id + 1`.
