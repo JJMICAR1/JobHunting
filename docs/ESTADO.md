@@ -135,6 +135,9 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   Migración 005: tabla `avisos(dia, tipo)`. `mercado` en prod envía una vez al día, solo con todos los portales con datos
   de hoy o, desde las 13 UTC, con los que haya. Plan B si GitHub deja de lanzar crons: cron-job.org (necesita OK del CEO
   y un token con permiso solo de Actions). Tests: 731 con BD.
+- 2026-11-04: primer pipeline prod (manual desde main): Tecnoempleo 635, Feina Activa 4602 (3946 + 656 SOC); salud y
+  mercado en prod ok; el CEO recibió "Mercado 2026-11-04". A petición del CEO, el mensaje pasa a frases (fecha en
+  español, miles con punto, comparación con ayer y con la semana, una línea por portal). Tests: 765 con BD.
 
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
