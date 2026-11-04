@@ -1,0 +1,34 @@
+name: cronjob
+
+# Plan B del cron (CEO, 2026-11-04): GitHub no dispara los `schedule` de este repo.
+# Crea o actualiza en cron-job.org las tareas que lanzan etiquetado (cada hora) y pipeline (diario) en prod.
+# Idempotente. Solo a mano o al cambiar este archivo en una rama claude/. No imprime secretos.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/cronjob.yml", "scripts/configurar_cronjob.py"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cronjob
+  cancel-in-progress: false
+
+jobs:
+  configurar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Configurar cron-job.org
+        env:
+          CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
+          GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
+        run: python scripts/configurar_cronjob.py
