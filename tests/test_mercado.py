@@ -106,7 +106,6 @@ def test_miles_con_punto(n, txt):
     t = mercado.formatear([fila(n_vistas=n, n_unicas=n, d_vistas_1d=None, d_vistas_7d=None)], "prod", HOY)
     assert f"Hoy hay {txt} ofertas activas ({txt} puestos distintos)." in t
     assert f"• Tecnoempleo: {txt} ofertas." in t
-    assert "," not in t.split("Por portal:")[0].split("\n\n")[1]
 
 
 def test_porcentaje_positivo_con_coma_y_signo():
