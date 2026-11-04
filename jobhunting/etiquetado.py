@@ -217,6 +217,7 @@ def parsear_callback(data: str, entorno: str):
     return partes[1] == "s", int(partes[2])
 
 
+MAX_LINEAS = 60     # comandos por mensaje
 MAX_TEXTO = 4000   # Telegram admite 4096 caracteres por mensaje
 
 # --- recoger ---
@@ -285,17 +286,26 @@ def _procesar(conn, u: dict, entorno: str, token: str, chat: str, ahora: datetim
                   {"chat_id": chat, "text": "Las reglas guardadas tienen un formato no válido (revisar config.reglas en Neon)"},
                   http)
         return
-    lote = R.parsear_lote(texto)
-    if isinstance(lote, int):
-        guardar_config(conn, "lote", lote, ahora)
-        resp = f"Lote: {lote} al día"
-    else:
+    # Un mensaje puede traer varios comandos, uno por linea (se pegan de una vez).
+    lineas = [x.strip() for x in texto.splitlines() if x.strip().startswith("/")][:MAX_LINEAS]
+    original, resps = reglas, []
+    for linea in lineas:
+        lote = R.parsear_lote(linea)
+        if isinstance(lote, int):
+            guardar_config(conn, "lote", lote, ahora)
+            resps.append(f"Lote: {lote} al día")
+            continue
         prog = progreso(conn)
-        if R._partir(texto)[0] == "/ver":
+        if R._partir(linea)[0] == "/ver":
+            if reglas != original:   # /ver tras cambios en el mismo mensaje: guardar antes de calcular
+                guardar_config(conn, "reglas", reglas.a_dict(), ahora)
+                original = reglas
             prog["auto"] = calcular_auto(conn, reglas, ahora, guardar=True).a_dict()
-        nuevas, resp = R.aplicar_comando(reglas, texto, prog)
-        if nuevas != reglas:
-            guardar_config(conn, "reglas", nuevas.a_dict(), ahora)
+        reglas, resp = R.aplicar_comando(reglas, linea, prog)
+        resps.append(resp)
+    if reglas != original:
+        guardar_config(conn, "reglas", reglas.a_dict(), ahora)
+    resp = "\n".join(resps)
     _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": resp[:MAX_TEXTO]}, http)
 
 
