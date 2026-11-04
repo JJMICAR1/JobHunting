@@ -1,0 +1,72 @@
+name: etiquetado
+
+# Fase 7: bot de etiquetado Si/No. Cada hora recoge clics y comandos de Telegram (getUpdates) y,
+# una vez al dia, envia un lote de ofertas con botones Si/No. Diseno: docs/ETIQUETADO.md.
+# - Cron (minuto 37 de cada hora): prod, solo con el codigo de main.
+# - Manual (dev o prod) y push en claude/** que cambie este archivo (dev).
+# - Sin TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID el job imprime lo que haria, avisa y termina bien.
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+    inputs:
+      entorno:
+        description: "Base de datos y prefijo de botones"
+        type: choice
+        options: [dev, prod]
+        default: dev
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/etiquetado.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: etiquetado-${{ github.event_name == 'schedule' && 'prod' || inputs.entorno || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  etiquetado:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Elegir entorno
+        id: env
+        env:
+          EVENTO: ${{ github.event_name }}
+          ENTORNO_MANUAL: ${{ inputs.entorno }}
+        run: |
+          case "$EVENTO" in
+            schedule) E=prod ;;
+            workflow_dispatch) E="$ENTORNO_MANUAL" ;;
+            *) E=dev ;;
+          esac
+          echo "entorno=$E" >> "$GITHUB_OUTPUT"
+      - name: Etiquetado (dev)
+        if: steps.env.outputs.entorno == 'dev'
+        env:
+          DATABASE_URL: ${{ secrets.NEO_URL_DEV }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_DEV no llega al workflow"; exit 1; fi
+          python -m jobhunting.etiquetado --entorno dev
+      - name: Etiquetado (prod)
+        # Prod solo con el codigo de main (un dispatch desde una rama claude/ no llega a prod).
+        if: steps.env.outputs.entorno == 'prod' && github.ref == 'refs/heads/main'
+        env:
+          DATABASE_URL: ${{ secrets.NEO_URL_PROD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::El secreto NEO_URL_PROD no llega al workflow"; exit 1; fi
+          python -m jobhunting.etiquetado --entorno prod
