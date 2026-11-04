@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-04 (Fase 7 construida; falta la puerta del CEO: 100 etiquetas)_
+_Última actualización: 2026-11-04 (Fase 7 en uso: etiquetando; plan B del cron activo)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
@@ -9,9 +9,8 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    conectores Canva y Descript, si aún no está hecho.
 2. Cada mañana: mirar que llega "Mercado laboral en Catalunya" a Telegram. Si un día no llega antes de las 14:00 de
    Madrid, lanzar a mano Actions → pipeline → Run workflow → rama `main`, entorno `prod`.
-3. Fusionar el PR #24 (ESTADO de la Fase 6) y después el PR de la Fase 7 (etiquetado).
-4. Tras fusionar el PR de reglas aprendidas: pegar en un solo mensaje al bot el bloque de criterios que el jefe propuso en el
-   chat (no está en el repo). Si no, escribir tus criterios al bot en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
+3. Fusionar el PR del plan B del cron (cron-job.org). Activar 2FA en cron-job.org y apuntar cuándo caduca el token de GitHub.
+4. Criterios ya enviados al bot (2026-11-04). Falta decir al jefe ciudad y modalidad. Puedes cambiar criterios en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
    `/quitar`, `/lote`, `/ver`). Cada día llega un lote de ofertas con botones Sí/No: pulsar. Los clics se recogen cada hora.
    Las ofertas que empiezan por `[dev]` son de pruebas (los clics se pueden perder; no cuentan).
    Puerta de la Fase 7: `/ver` muestra 100/100. Con `/lote 30` se llega antes.
@@ -22,9 +21,12 @@ Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante
 **Fase 7 — Reglas + etiquetado Sí/No: construida (2026-11-04), falta la puerta (100 etiquetas en prod).**
 Diseño y decisiones del CEO en `docs/ETIQUETADO.md` (bot en Actions cada hora, criterios por comandos de Telegram en Neon
 `config`, muestreo 70/30). 2026-11-04: primera ejecución en dev (push) envió 10 ofertas `[dev]` a Telegram (ok).
-Al empezar la siguiente sesión: comprobar en Actions si ya hay alguna ejecución con evento `schedule` (pipeline o etiquetado).
-Hasta el 2026-11-04 08:11 UTC GitHub no había lanzado NINGÚN cron del repo; si sigue igual, proponer el plan B (cron-job.org
-con token solo de Actions; necesita OK del CEO). Sin cron, el bot solo recoge al lanzarlo a mano (Actions → etiquetado → prod).
+Plan B del cron ACTIVO (CEO, 2026-11-04): GitHub no lanzó ningún `schedule` del repo. cron-job.org (cuenta del CEO) llama a
+workflow_dispatch con un token fine-grained del CEO (solo este repo, Actions read/write): `etiquetado` prod a los :37 de cada
+hora y `pipeline` prod a las 6:17 de Madrid (salud y mercado van detrás). Tareas creadas por `scripts/configurar_cronjob.py`
+(workflow `cronjob`, secretos `CRONJOB_API_KEY` y `GH_DISPATCH_TOKEN`; repetir al rotar el token).
+Al empezar la siguiente sesión: comprobar en Actions que hay ejecuciones `workflow_dispatch` de etiquetado cada hora y del
+pipeline a las 05:17 UTC, y que el mensaje de Mercado llegó.
 
 **Fase 6 — Control de mercado: OK (CEO, 2026-11-04).**
 
