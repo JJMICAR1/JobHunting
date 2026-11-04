@@ -20,6 +20,7 @@ from datetime import date, datetime, timezone
 MAX_CARACTERES = 4000   # el límite de Telegram es 4096
 TIMEOUT = 20
 FUENTE_FEINA = "feinaactiva"
+HORA_ULTIMA_OPORTUNIDAD = 13   # UTC: tras el ultimo respaldo del pipeline (12:53)
 
 
 @dataclass(frozen=True)
@@ -137,11 +138,19 @@ def main(argv=None, ahora=None, http=None) -> int:
     try:
         conn = db.conectar(url)
         try:
+            if prod_envio and token and chat:
+                db.migrar(conn)   # idempotente: garantiza la tabla avisos en prod
+                conn.commit()
             filas = leer(conn)
             if prod_envio and token and chat:
                 # Varios crons de respaldo: en prod se envia como mucho una vez al dia (UTC).
                 if not any(f.dia == ahora.date() for f in filas):
                     print("sin datos de hoy, no se envia")
+                    return 0
+                from jobhunting.pipeline import PORTALES
+                de_hoy = {f.portal for f in filas if f.dia == ahora.date()}
+                if not set(PORTALES) <= de_hoy and ahora.hour < HORA_ULTIMA_OPORTUNIDAD:
+                    print("datos incompletos, se espera al siguiente respaldo")
                     return 0
                 if ya_enviado(conn, ahora.date()):
                     print("ya enviado hoy")

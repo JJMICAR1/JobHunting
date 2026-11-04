@@ -136,22 +136,26 @@ def ejecutar(portal="tecnoempleo", **kw) -> int:
     return ejecutar_portal(portal, **kw)
 
 
-def ya_ejecutado_hoy(filas, hoy) -> bool:
-    """Pura: True si para CADA portal de PORTALES hay una ejecucion 'ok' en el dia UTC `hoy`.
-    `filas`: iterable de (portal, estado, fin) con `fin` datetime (se pasa a UTC) o date."""
-    oks = set()
+def portales_pendientes(filas, hoy) -> list[str]:
+    """Pura: portales de PORTALES sin ninguna ejecucion 'ok' ni 'bloqueado' en el dia UTC `hoy`
+    (un bloqueo no se reintenta el mismo dia). `filas`: iterable de (portal, estado, fin)."""
+    cubiertos = set()
     for portal, estado, fin in filas:
-        if estado != "ok":
+        if estado not in ("ok", "bloqueado"):
             continue
         if isinstance(fin, datetime):
             fin = (fin.astimezone(timezone.utc) if fin.tzinfo else fin).date()
         if fin == hoy:
-            oks.add(portal)
-    return all(p in oks for p in PORTALES)
+            cubiertos.add(portal)
+    return [p for p in PORTALES if p not in cubiertos]
 
 
-def _ya_hecho_en_bd(database_url, ahora=_ahora) -> bool | None:
-    """Migra y consulta `ejecuciones`. None si no se pudo (se ejecuta igualmente)."""
+def ya_ejecutado_hoy(filas, hoy) -> bool:
+    return not portales_pendientes(filas, hoy)
+
+
+def _pendientes_en_bd(database_url, ahora=_ahora) -> list[str] | None:
+    """Migra y consulta `ejecuciones`. None si no se pudo (falla abierto: se ejecuta todo)."""
     try:
         conn = db.conectar(database_url)
         try:
@@ -163,7 +167,7 @@ def _ya_hecho_en_bd(database_url, ahora=_ahora) -> bool | None:
                 (hoy,)).fetchall()
         finally:
             conn.close()
-        return ya_ejecutado_hoy(filas, hoy)
+        return portales_pendientes(filas, hoy)
     except Exception as e:
         print(f"No se pudo comprobar ejecuciones previas ({type(e).__name__}); se ejecuta", file=sys.stderr)
         return None
@@ -177,9 +181,15 @@ def main(argv=None) -> int:
                     help="no scrapear si hoy (UTC) ya hay ejecucion ok de cada portal (crons de respaldo)")
     a = ap.parse_args(argv)
     url = os.environ.get("DATABASE_URL")
-    if a.solo_si_falta and not a.dry_run and url and _ya_hecho_en_bd(url):
-        print("ya ejecutado hoy: todos los portales tienen una ejecucion ok; no se vuelve a scrapear")
-        return 0
+    if a.solo_si_falta and not a.dry_run and url:
+        pend = _pendientes_en_bd(url)
+        if pend is not None:
+            if a.portal != "todos":
+                pend = [p for p in pend if p == a.portal]
+            if not pend:
+                print("ya ejecutado hoy: cada portal tiene una ejecucion ok o bloqueada; no se vuelve a scrapear")
+                return 0
+            return _peor(ejecutar(portal=p, dry_run=False, database_url=url) for p in pend)
     return ejecutar(portal=a.portal, dry_run=a.dry_run, database_url=os.environ.get("DATABASE_URL"))
 
 
