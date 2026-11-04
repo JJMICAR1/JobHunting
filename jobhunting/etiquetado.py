@@ -57,6 +57,23 @@ def leer_lote(conn) -> int:
     return v if isinstance(v, int) and not isinstance(v, bool) and R.LOTE_MIN <= v <= R.LOTE_MAX else LOTE_DEFECTO
 
 
+def etiquetadas(conn) -> list[dict]:
+    """Etiquetas unidas a su oferta, en orden estable (entrada de `reglas.aprender`)."""
+    filas = conn.execute(
+        "SELECT o.titulo, o.empresa, o.ciudad, o.modalidad, e.etiqueta FROM etiquetas e "
+        "JOIN ofertas o ON o.portal = e.portal AND o.id_portal = e.id_portal "
+        "ORDER BY e.etiquetada, e.portal, e.id_portal").fetchall()
+    return [dict(zip(("titulo", "empresa", "ciudad", "modalidad", "etiqueta"), f)) for f in filas]
+
+
+def calcular_auto(conn, manuales: R.Reglas, ahora: datetime, guardar: bool) -> R.Reglas:
+    """Reglas aprendidas de las etiquetas (respetando `ignorar`). Con `guardar` las deja en config.reglas_auto."""
+    auto = R.aprender(etiquetadas(conn), manuales.ignorar)
+    if guardar:
+        guardar_config(conn, "reglas_auto", auto.a_dict(), ahora)
+    return auto
+
+
 def hay_ofertas_de_hoy(conn, dia: date) -> bool:
     ini, fin = _rango(dia)
     return conn.execute("SELECT 1 FROM ofertas WHERE ultima_vez >= %s AND ultima_vez < %s LIMIT 1",
@@ -171,6 +188,21 @@ def formatear(c: dict, entorno: str, con_reglas: bool) -> str:
     return "\n".join(lineas)
 
 
+def mensaje_intro(elegidas: list[dict], auto: R.Reglas, n_etiquetas: int, top: int = 5) -> str:
+    """Primer mensaje del lote: que se ha aprendido (o cuanto falta para empezar)."""
+    if auto.vacia():
+        if n_etiquetas < R.MIN_ETIQUETAS:
+            return f"Aún aprendo: llevas {n_etiquetas}/{R.MIN_ETIQUETAS} etiquetas para empezar a puntuar"
+        return f"Lote de hoy: {len(elegidas)} al azar (aún no he encontrado patrones claros en tus Sí/No)"
+    n_r = sum(c["muestra"] == "reglas" for c in elegidas)
+    lineas = [f"Lote de hoy: {n_r} por lo que he aprendido de ti, {len(elegidas) - n_r} al azar"]
+    if auto.si:
+        lineas.append("Te gusta: " + ", ".join(auto.si[:top]))
+    if auto.no:
+        lineas.append("No te gusta: " + ", ".join(auto.no[:top]))
+    return "\n".join(lineas)
+
+
 def teclado(entorno: str, envio_id: int) -> dict:
     p = PREFIJO[entorno]
     return {"inline_keyboard": [[{"text": "Sí", "callback_data": f"{p}:s:{envio_id}"},
@@ -259,6 +291,8 @@ def _procesar(conn, u: dict, entorno: str, token: str, chat: str, ahora: datetim
         resp = f"Lote: {lote} al día"
     else:
         prog = progreso(conn)
+        if R._partir(texto)[0] == "/ver":
+            prog["auto"] = calcular_auto(conn, reglas, ahora, guardar=True).a_dict()
         nuevas, resp = R.aplicar_comando(reglas, texto, prog)
         if nuevas != reglas:
             guardar_config(conn, "reglas", nuevas.a_dict(), ahora)
@@ -278,7 +312,9 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
     if not hay_ofertas_de_hoy(conn, dia):
         print("sin ofertas vistas hoy, no se envía lote")
         return 0
-    reglas, lote = leer_reglas(conn), leer_lote(conn)
+    manuales, lote = leer_reglas(conn), leer_lote(conn)
+    auto = calcular_auto(conn, manuales, ahora, guardar=real and entorno == "prod")
+    reglas = R.combinar(manuales, auto)
     pendientes = lote - (enviados_hoy(conn, dia) if real else 0)   # reanuda un lote cortado a medias
     if pendientes <= 0:
         if real:
@@ -289,6 +325,11 @@ def enviar_lote(conn, entorno: str, token: str | None, chat: str | None, ahora: 
         print("sin candidatas nuevas")
         return 0
     enviadas = 0
+    intro = mensaje_intro(elegidas, auto, conn.execute("SELECT count(*) FROM etiquetas").fetchone()[0])
+    if real and pendientes == lote:   # no se repite si se reanuda un lote cortado
+        _intentar(tg.llamar, token, "sendMessage", {"chat_id": chat, "text": intro}, http)
+    elif not real:
+        print(intro + "\n")
     for c in elegidas:
         texto = formatear(c, entorno, not reglas.vacia())
         if not real:
