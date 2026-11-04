@@ -9,8 +9,9 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    conectores Canva y Descript, si aún no está hecho.
 2. Cada mañana: mirar que llega "Mercado laboral en Catalunya" a Telegram. Si un día no llega antes de las 14:00 de
    Madrid, lanzar a mano Actions → pipeline → Run workflow → rama `main`, entorno `prod`.
-3. Fusionar el PR del plan B del cron (cron-job.org). Activar 2FA en cron-job.org y apuntar cuándo caduca el token de GitHub.
-4. Criterios ya enviados al bot (2026-11-04). Falta decir al jefe ciudad y modalidad. Puedes cambiar criterios en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
+3. Fusionar el PR #27 (plan B del cron). Activar 2FA en cron-job.org. El token de GitHub caduca el **2026-11-04 + 1 año
+   (2027-11-04)**: antes, crear otro, cambiar el secreto `GH_DISPATCH_TOKEN` y lanzar el workflow `cronjob`.
+4. Criterios ya enviados al bot (2026-11-04); ciudad y modalidad propuestas por el jefe en el chat (no van al repo). Puedes cambiar criterios en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
    `/quitar`, `/lote`, `/ver`). Cada día llega un lote de ofertas con botones Sí/No: pulsar. Los clics se recogen cada hora.
    Las ofertas que empiezan por `[dev]` son de pruebas (los clics se pueden perder; no cuentan).
    Puerta de la Fase 7: `/ver` muestra 100/100. Con `/lote 30` se llega antes.
