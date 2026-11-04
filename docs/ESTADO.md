@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-_Última actualización: 2026-11-04 (Fase 6 OK; siguiente Fase 7)_
+_Última actualización: 2026-11-04 (Fase 7 construida; falta la puerta del CEO: 100 etiquetas)_
 
 ## Tareas del CEO (lo que tienes que hacer tú)
 _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tienes nada pendiente._
@@ -9,17 +9,23 @@ _El jefe actualiza esta lista al final de cada sesión. Si está vacía, no tien
    conectores Canva y Descript, si aún no está hecho.
 2. Cada mañana: mirar que llega "Mercado laboral en Catalunya" a Telegram. Si un día no llega antes de las 14:00 de
    Madrid, lanzar a mano Actions → pipeline → Run workflow → rama `main`, entorno `prod`.
-3. Abrir una sesión nueva y escribir **"Empezamos la Fase 7"**. Ir pensando qué ofertas quieres y cuáles no (puesto,
-   palabras clave, ciudades, remoto). Eso NO va al repo: irá a Neon.
+3. Fusionar el PR #24 (ESTADO de la Fase 6) y después el PR de la Fase 7 (etiquetado).
+4. Tras fusionar: escribir tus criterios al bot en Telegram (`/ayuda` los lista: `/si`, `/no`, `/ciudad`, `/modalidad`,
+   `/quitar`, `/lote`, `/ver`). Cada día llega un lote de ofertas con botones Sí/No: pulsar. Los clics se recogen cada hora.
+   Las ofertas que empiezan por `[dev]` son de pruebas (los clics se pueden perder; no cuentan).
+   Puerta de la Fase 7: `/ver` muestra 100/100. Con `/lote 30` se llega antes.
 
 Lo que queda de fuentes está en la **Fase 4.5**, más abajo, para más adelante.
 
 ## Fase actual
-**Fase 6 — Control de mercado: OK (CEO, 2026-11-04).** Siguiente: **Fase 7 — Reglas + etiquetado Sí/No** (puerta: 100 etiquetas;
-dónde alojar el bot de Telegram para etiquetar se decide en esta fase).
-Al empezar la Fase 7: comprobar en Actions si el cron del pipeline (05:17 UTC) o sus respaldos (06:47, 09:23, 12:53) se
-dispararon con evento `schedule`. El 2026-11-04 GitHub no lanzó el de 05:17 (se ejecutó prod a mano). Si siguen sin
-dispararse, proponer al CEO el plan B (cron-job.org con token solo de Actions).
+**Fase 7 — Reglas + etiquetado Sí/No: construida (2026-11-04), falta la puerta (100 etiquetas en prod).**
+Diseño y decisiones del CEO en `docs/ETIQUETADO.md` (bot en Actions cada hora, criterios por comandos de Telegram en Neon
+`config`, muestreo 70/30). 2026-11-04: primera ejecución en dev (push) envió 10 ofertas `[dev]` a Telegram (ok).
+Al empezar la siguiente sesión: comprobar en Actions si ya hay alguna ejecución con evento `schedule` (pipeline o etiquetado).
+Hasta el 2026-11-04 08:11 UTC GitHub no había lanzado NINGÚN cron del repo; si sigue igual, proponer el plan B (cron-job.org
+con token solo de Actions; necesita OK del CEO). Sin cron, el bot solo recoge al lanzarlo a mano (Actions → etiquetado → prod).
+
+**Fase 6 — Control de mercado: OK (CEO, 2026-11-04).**
 
 **Fase 5 — Salud y reparación: OK (CEO, 2026-11-03).**
 Simulacro 2026-11-03: selector de Tecnoempleo roto a propósito → pipeline en Neon dev (0 ofertas) → `salud` abrió
@@ -52,7 +58,7 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
 | 4.5 Fuentes pendientes | Más adelante |
 | 5. Salud y reparación | OK (CEO) |
 | 6. Control de mercado | OK (CEO) |
-| 7. Reglas + etiquetado | Siguiente |
+| 7. Reglas + etiquetado | Construida; falta puerta (100 etiquetas) |
 | 8–9 | Sin empezar |
 
 ## Qué hay
@@ -140,15 +146,30 @@ Cada fuente necesita la decisión del CEO y su propia puerta (tests, ejecución 
   mercado en prod ok; el CEO recibió "Mercado 2026-11-04". A petición del CEO, el mensaje pasa a frases (fecha en
   español, miles con punto, comparación con ayer y con la semana, una línea por portal). Tests: 765 con BD.
 
+- Fase 7:
+  - Migración 006: `config` (clave/valor jsonb: `reglas`, `lote`, `telegram_offset`), `envios_etiquetado` (una oferta se
+    envía como mucho una vez; el id va en el botón) y `etiquetas` (último clic gana).
+  - `jobhunting/reglas.py` (puro): normalización por palabra completa, nota (+1 si, −3 no, +0,5 ciudad/modalidad) y comandos.
+  - `jobhunting/telegram.py`: cliente de la Bot API compartido con `mercado.py` (errores sin token ni URL; 429 = parar).
+  - `jobhunting/etiquetado.py` (`python -m jobhunting.etiquetado --entorno prod|dev [--dry-run]`): recoge (getUpdates; en dev
+    sin offset, solo mira; solo obedece al chat `TELEGRAM_CHAT_ID`) y envía el lote una vez al día (`avisos` tipo `etiquetado`).
+    Reglas inválidas en `config` no bloquean el offset (se avisa por el chat).
+  - `.github/workflows/etiquetado.yml`: cron a los 37 min de cada hora (prod, solo main), manual y push (dev). En el latido.
+  - Tests: 876 con BD. Reviewer: un bloqueante (update veneno) arreglado; resto aplicado salvo comprobar `from.id`
+    (equivale al chat en un chat privado).
+
 ## Agentes activos por fase
 - Fase 2: devops, reviewer.
 - Fase 3: scraper-dev, tester, db-engineer, devops, reviewer.
 - Fase 4: scraper-dev, tester, reviewer (+ devops si hay secretos de API nuevos).
 - Fase 5: devops, scraper-dev, tester, reviewer.
 - Fase 6: db-engineer, devops, tester, reviewer.
+- Fase 7: devops, tester, reviewer.
 - Fase 8: ml-engineer.
 
 ## Decisiones
+- 2026-11-04 (CEO, Fase 7): bot en Actions cada hora (sin servicios nuevos); criterios por comandos de Telegram guardados
+  en Neon `config`; muestreo 70 % mejor nota / 30 % azar; lote de 10 al día (cambiable con `/lote`).
 - 2026-11-03 (CEO, Fase 6): OK a Telegram (solo enviar desde Actions; el alojamiento del bot para etiquetar sigue en la
   Fase 7). Contenido: por portal (activas, nuevas, desaparecidas, únicos, Δ1d/Δ7d). Envío tras el cron de prod.
 - 2026-11-03 (Fase 6, reviewer): el push en `claude/**` de `mercado.yml` usa el token de Telegram con código de la rama
